@@ -1,0 +1,338 @@
+// File: prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -------------------- AUTH --------------------
+model User {
+  id                 String  @id @default(cuid())
+  email              String  @unique
+  passwordHash       String
+  displayName        String?
+  role               String  @default("DISTRIBUTOR") // SQLite: no enums
+  forcePasswordReset Boolean @default(false)
+
+  distributor Distributor?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Distributor {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String
+  tier            String  @default("STANDARD")
+  country         String?
+  defaultCurrency String  @default("INR")
+  phone           String?
+  email           String?
+
+  // Billing
+  billingName    String?
+  billingLine1   String?
+  billingLine2   String?
+  billingCity    String?
+  billingState   String?
+  billingZip     String?
+  billingCountry String?
+
+  tickets Ticket[]
+  orders  Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// -------------------- PRODUCTS --------------------
+model Product {
+  id          String  @id @default(cuid())
+  sku         String  @unique
+  name        String
+  image       String?
+  collection  String?
+  stoneType   String?
+  thicknessMm Float?
+  isActive    Boolean @default(true)
+
+  variants   ProductVariant[]
+  orderItems OrderItem[] // opposite relation for OrderItem.product
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  sizeLabel String
+  widthMm   Float?
+  heightMm  Float?
+  isActive  Boolean @default(true)
+
+  prices Price[]
+
+  // Opposite relation for OrderItem.variant
+  orderItems OrderItem[]
+
+  // ✅ Packing Rules (NEW)
+  packingRules PackingRule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([productId, sizeLabel], name: "productId_sizeLabel")
+  @@index([productId])
+}
+
+model Price {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  tier     String
+  currency String
+
+  priceSheet Float?
+  priceSqm   Float?
+  priceSqft  Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([variantId, tier, currency], name: "variantId_tier_currency")
+  @@index([variantId])
+}
+
+// -------------------- OTHER TABLES --------------------
+model Announcement {
+  id       String  @id @default(cuid())
+  title    String
+  message  String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Ticket {
+  id            String      @id @default(cuid())
+  distributorId String
+  distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+
+  type        String
+  subject     String
+  description String
+  status      String @default("OPEN")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([distributorId])
+  @@index([createdAt])
+}
+
+// -------------------- ORDERS --------------------
+model Order {
+  id            String      @id @default(cuid())
+  distributorId String
+  distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+
+  status String  @default("RECEIVED")
+  eta    String?
+  notes  String?
+
+  items     OrderItem[]
+  documents OrderDocument[]
+
+  createdAt DateTime @default(now())
+  // ✅ IMPORTANT: default(now()) so existing rows can migrate
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([distributorId])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id String @id @default(cuid())
+
+  orderId   String
+  // ✅ IMPORTANT: nullable so existing 34 rows can migrate
+  productId String?
+  variantId String?
+
+  qty       Int
+  unitPrice Float
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // ✅ optional relation because productId is nullable
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  // ✅ IMPORTANT: default(now()) so existing rows can migrate
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+model OrderDocument {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  title String?
+  url   String?
+
+  createdAt DateTime @default(now())
+  // ✅ IMPORTANT: default(now()) so existing rows can migrate
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([orderId])
+}
+
+// -------------------- PACKING CALCULATOR (NEW) --------------------
+// SQLite-safe (NO enums, NO Json)
+
+// Per-variant packing rule (ROLL / CRATE / PALLET)
+model PackingRule {
+  id String @id @default(cuid())
+
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  // "ROLL" | "CRATE" | "PALLET"
+  packingType String
+
+  sheetsPerUnit    Int
+  weightPerSheetKg Float
+
+  // Unit dimensions (cm)
+  unitLengthCm Float
+  unitWidthCm  Float
+  unitHeightCm Float
+
+  // Empty unit weight (tare)
+  unitTareKg Float
+
+  // Palletization (optional)
+  palletUnitsPerPallet Int?
+  palletLengthCm       Float?
+  palletWidthCm        Float?
+  palletHeightCm       Float?
+  palletTareKg         Float?
+
+  fragile         Boolean @default(false)
+  stackingAllowed Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([variantId, packingType])
+  @@index([variantId])
+}
+
+// Container types (GP20 / GP40 / HC40 / LCL)
+model ContainerType {
+  id String @id @default(cuid())
+
+  // "GP20" | "GP40" | "HC40" | "LCL"
+  mode String
+
+  volumeCbm   Float
+  maxWeightKg Float
+
+  // Internal dimensions (cm)
+  internalLengthCm Float
+  internalWidthCm  Float
+  internalHeightCm Float
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([mode])
+}
+
+model SheetWeightMaster {
+  id               String   @id @default(cuid())
+  collection       String
+  stoneType        String
+  sizeLabel        String
+  perSheetWeightKg Float
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([collection, stoneType, sizeLabel], name: "collection_stoneType_sizeLabel")
+  @@index([collection, stoneType, sizeLabel])
+}
+
+model PackingRuleMaster {
+  id              String   @id @default(cuid())
+  packingType     String   // "ROLL" | "PALLET" | "CRATE"
+  sizeLabel       String   // e.g., "610x1220 mm"
+  qtyMin          Int
+  qtyMax          Int
+  dimLIn          Float
+  dimWIn          Float
+  dimHIn          Float
+  packingWeightKg Float
+  isDefault       Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([packingType, sizeLabel])
+  @@index([packingType, sizeLabel, qtyMin, qtyMax])
+}
+
+model MarketingAsset {
+  id           String   @id @default(cuid())
+  title        String
+
+  // "DOCUMENT" | "IMAGE" | "VIDEO"
+  type         String
+
+  // e.g. "PRODUCT_CATALOGUE_FULL", "PROJECT_HOTEL", "VIDEO_REELS_SHORT"
+  category     String
+
+  collection   String?
+  stoneType    String?
+  description  String?
+
+  // If uploaded -> filePath filled + fileUrl = /api/marketing/[id]/download
+  // If link-based video -> externalUrl filled
+  fileUrl      String?
+  externalUrl  String?
+  filePath     String?
+  mimeType     String?
+  fileSize     Int?
+
+  thumbnailUrl String?
+
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([type])
+  @@index([category])
+  @@index([isActive])
+}

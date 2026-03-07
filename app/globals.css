@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Casadenza-inspired palette (close match) */
+:root {
+  --cz-primary: #0a0a0b; /* near-black */
+  --cz-accent: #c8a15a;  /* warm gold */
+  --cz-bg: #f6f7fb;
+  --cz-card: #ffffff;
+  --cz-border: #e5e7eb;
+  --cz-muted: #6b7280;
+  color-scheme: light;
+}
+
+body {
+  @apply text-zinc-900;
+  background: var(--cz-bg);
+}
+
+a { @apply underline-offset-4; }
+
+/* Reusable utility classes */
+@layer utilities {
+  .cz-card {
+    @apply rounded-2xl border bg-white shadow-sm;
+    border-color: var(--cz-border);
+  }
+  .cz-muted { color: var(--cz-muted); }
+  .cz-accent { color: var(--cz-accent); }
+  .cz-accent-bg { background: var(--cz-accent); }
+  .cz-primary-bg { background: var(--cz-primary); }
+  .cz-ring { box-shadow: 0 0 0 4px rgb(200 161 90 / 18%); }
+}
+
+a[data-card="products-card"],
+button[data-card="products-card"] {
+  display: block;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+a[data-card="products-card"]:hover,
+button[data-card="products-card"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.10);
+  border-color: rgba(0,0,0,0.18);
+}
+
+
