@@ -56,7 +56,7 @@ export default async function AdminProductsPage() {
         </Link>
       </div>
 
-      <ProductsTable initialRows={rows} />
+      <ProductsTable />
     </div>
   );
 }
