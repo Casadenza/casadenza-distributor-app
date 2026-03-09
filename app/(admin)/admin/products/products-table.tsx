@@ -171,7 +171,6 @@ export default function ProductsTable() {
 
   return (
     <div className="space-y-4">
-      {/* Filter / Search Bar */}
       <div className="bg-[#FAF9F6] border border-[#EAE7E2] rounded-2xl p-3 flex flex-wrap items-center gap-4 shadow-sm">
         <div className="relative flex-1 max-w-[320px]">
           <Search
@@ -197,7 +196,6 @@ export default function ProductsTable() {
         </button>
       </div>
 
-      {/* Actions Row */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -236,7 +234,6 @@ export default function ProductsTable() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white border border-[#EAE7E2] rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px]">
