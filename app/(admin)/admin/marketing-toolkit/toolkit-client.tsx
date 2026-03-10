@@ -25,7 +25,6 @@ const labelCls = "text-[9px] font-bold text-[#A39E93] uppercase tracking-[0.1em]
 const TYPES = ["ALL", "DOCUMENT", "IMAGE", "VIDEO"] as const;
 
 const CATEGORIES = [
-  // Documents (Core)
   "PRODUCT_CATALOGUE_FULL",
   "COLLECTION_CATALOGUE",
   "TECHNICAL_DATA_SHEET",
@@ -35,16 +34,13 @@ const CATEGORIES = [
   "BROCHURE_SHORT",
   "COMPANY_PROFILE_PDF",
   "OTHERS_DOCUMENTS",
-  // Sales Tools
   "SAMPLE_KIT_GUIDE",
   "PROJECT_REFERENCE_LIST",
-  // Images (Projects)
   "PROJECT_HOTEL",
   "PROJECT_VILLA",
   "PROJECT_COMMERCIAL_FACADE",
   "PROJECT_INTERIOR_WALL",
   "PROJECT_BEFORE_AFTER",
-  // Videos
   "VIDEO_INSTALLATION",
   "VIDEO_PROJECT_SHOWCASE",
   "VIDEO_PRODUCT_HIGHLIGHT",
@@ -94,7 +90,6 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
-  // Upload form
   const [form, setForm] = useState({
     title: "",
     type: "DOCUMENT",
@@ -108,7 +103,9 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
 
   const collections = useMemo(() => {
     const set = new Set<string>();
-    for (const it of items) if (it.collection) set.add(String(it.collection));
+    for (const it of items) {
+      if (it.collection) set.add(String(it.collection));
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [items]);
 
@@ -116,7 +113,8 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
     return items.filter((it) => {
       const t = String(it.type || "").toUpperCase();
       const c = String(it.category || "").toUpperCase();
-      const hay = `${it.title} ${it.description || ""} ${it.collection || ""} ${it.stoneType || ""} ${t} ${c}`.toLowerCase();
+      const hay =
+        `${it.title} ${it.description || ""} ${it.collection || ""} ${it.stoneType || ""} ${t} ${c}`.toLowerCase();
 
       if (type !== "ALL" && t !== type) return false;
       if (category !== "ALL" && c !== category) return false;
@@ -140,8 +138,15 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
   async function createAsset() {
     setBusy(true);
     try {
+      if (!form.title.trim()) {
+        throw new Error("Please enter a title.");
+      }
+
       if (uploadMode === "VIDEO_LINK") {
-        // JSON mode
+        if (!form.externalUrl.trim()) {
+          throw new Error("Please enter a video URL.");
+        }
+
         const payload = {
           title: form.title,
           type: "VIDEO",
@@ -160,8 +165,14 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
 
         if (!res.ok) throw new Error(await res.text());
       } else {
-        // Multipart upload
         if (!form.file) throw new Error("Please choose a file.");
+
+        const maxSizeMB = form.type === "VIDEO" ? 100 : 10;
+        const sizeMB = form.file.size / 1024 / 1024;
+
+        if (sizeMB > maxSizeMB) {
+          throw new Error(`File too large. Maximum allowed size is ${maxSizeMB} MB.`);
+        }
 
         const fd = new FormData();
         fd.append("title", form.title);
@@ -172,11 +183,14 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
         if (form.description) fd.append("description", form.description);
         fd.append("file", form.file);
 
-        const res = await fetch("/api/admin/marketing", { method: "POST", body: fd });
+        const res = await fetch("/api/admin/marketing", {
+          method: "POST",
+          body: fd,
+        });
+
         if (!res.ok) throw new Error(await res.text());
       }
 
-      // reset form
       setForm({
         title: "",
         type: "DOCUMENT",
@@ -199,6 +213,7 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
   async function deleteAsset(id: string) {
     if (!confirm("Delete this asset?")) return;
     setDeleting((p) => ({ ...p, [id]: true }));
+
     try {
       const res = await fetch(`/api/admin/marketing/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
@@ -212,7 +227,6 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Sticky Header */}
       <div className="sticky top-0 z-40 bg-white border-b border-[#EEEAE2] shadow-sm">
         <div className="px-4 py-3 flex flex-wrap items-end gap-4">
           <div className="flex-1 min-w-[180px]">
@@ -300,7 +314,6 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
           </div>
         </div>
 
-        {/* Unique segmented mode switch */}
         <div className="px-4 pb-3">
           <div className="inline-flex border border-[#EEEAE2] bg-[#FBF9F6] rounded-full overflow-hidden">
             <button
@@ -327,7 +340,6 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
           </div>
         </div>
 
-        {/* Upload Panel */}
         <div className="px-4 pb-4">
           <div className="border border-[#EEEAE2] bg-white rounded-sm">
             <div className="px-4 py-2 border-b border-[#F2EFE9] flex items-center justify-between">
@@ -436,7 +448,7 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
                     className="block w-full text-[11px]"
                   />
                   <div className="text-[10px] text-[#A39E93] mt-1">
-                    Documents: PDF • Images: JPG/PNG/WEBP • Videos: MP4/WEBM
+                    Documents: PDF (max 10 MB) • Images: JPG/PNG/WEBP (max 10 MB) • Videos: MP4/WEBM (max 100 MB)
                   </div>
                 </div>
               )}
@@ -459,7 +471,6 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
         </div>
       </div>
 
-      {/* Grid */}
       <div className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map((it) => {
@@ -476,6 +487,7 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
                       {typeIcon(t)}
                       <div className="text-[11px] font-bold truncate">{it.title}</div>
                     </div>
+
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className={cn("text-[8px] font-bold border px-1.5 py-0.5 rounded-sm uppercase", typeBadge(t))}>
                         {t}
@@ -525,6 +537,7 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
                       <a
                         href={t === "VIDEO" && it.externalUrl ? it.externalUrl : it.fileUrl}
                         target="_blank"
+                        rel="noreferrer"
                         className="text-[10px] px-3 py-1.5 rounded-lg border border-[#E5E0D8] bg-white hover:bg-black hover:text-white transition inline-flex items-center gap-1"
                       >
                         <ExternalLink size={13} />
@@ -535,6 +548,8 @@ export default function AdminMarketingToolkitClient({ initialItems }: { initialI
                     {canDownload ? (
                       <a
                         href={it.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
                         className="text-[10px] px-3 py-1.5 rounded-lg border border-[#E5E0D8] bg-white hover:bg-black hover:text-white transition inline-flex items-center gap-1"
                       >
                         <Download size={13} />

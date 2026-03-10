@@ -42,7 +42,12 @@ function docTypeLabel(d: any) {
 }
 
 function docUrl(d: any) {
-  return String(d?.url || "");
+  const base = String(d?.url || "").trim();
+  if (!base) return "";
+  if (base.includes("res.cloudinary.com") && base.toLowerCase().endsWith(".pdf")) {
+    return `${base}?download=0`;
+  }
+  return base;
 }
 
 function isDataUrl(u: string) {
