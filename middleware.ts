@@ -24,15 +24,23 @@ async function getSession(req: NextRequest) {
   }
 }
 
+function addSecurityHeaders(res: NextResponse) {
+  res.headers.set("Cache-Control", "no-store");
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // ✅ Never redirect API routes to /login (breaks fetch() by returning HTML)
+  // Never redirect API routes to /login
   if (pathname.startsWith("/api")) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
-  // ✅ Public / static routes
+  // Public / static routes
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/_next") ||
@@ -41,33 +49,33 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/manifest") ||
     pathname.startsWith("/brand")
   ) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   const session = await getSession(req);
 
-  // Not logged in → go login with next=
+  // Not logged in -> go login with next=
   if (!session?.userId) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return addSecurityHeaders(NextResponse.redirect(url));
   }
 
   const role = session.role as "ADMIN" | "DISTRIBUTOR";
 
-  // Root → role home
+  // Root -> role home
   if (pathname === "/") {
     const url = req.nextUrl.clone();
     url.pathname = role === "ADMIN" ? "/admin" : "/dashboard";
-    return NextResponse.redirect(url);
+    return addSecurityHeaders(NextResponse.redirect(url));
   }
 
-  // Block legacy admin path under dashboard (clean separation)
+  // Block legacy admin path under dashboard
   if (pathname.startsWith("/dashboard/admin")) {
     const url = req.nextUrl.clone();
     url.pathname = role === "ADMIN" ? "/admin" : "/dashboard";
-    return NextResponse.redirect(url);
+    return addSecurityHeaders(NextResponse.redirect(url));
   }
 
   // ADMIN area
@@ -75,9 +83,9 @@ export async function middleware(req: NextRequest) {
     if (role !== "ADMIN") {
       const url = req.nextUrl.clone();
       url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
+      return addSecurityHeaders(NextResponse.redirect(url));
     }
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // DISTRIBUTOR area
@@ -85,18 +93,17 @@ export async function middleware(req: NextRequest) {
     if (role !== "DISTRIBUTOR") {
       const url = req.nextUrl.clone();
       url.pathname = "/admin";
-      return NextResponse.redirect(url);
+      return addSecurityHeaders(NextResponse.redirect(url));
     }
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
-  // Any other route → send to role home
+  // Any other route -> send to role home
   const url = req.nextUrl.clone();
   url.pathname = role === "ADMIN" ? "/admin" : "/dashboard";
-  return NextResponse.redirect(url);
+  return addSecurityHeaders(NextResponse.redirect(url));
 }
 
-// ✅ Exclude /api completely from middleware matching
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
