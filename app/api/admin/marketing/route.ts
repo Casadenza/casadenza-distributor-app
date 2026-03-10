@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "@/lib/serverSession";
-import { mkdir, writeFile } from "fs/promises";
-import { marketingDirForType, marketingFilePath } from "@/lib/marketingStorage";
+import { uploadBufferToCloudinary } from "@/lib/cloudinary";
 
 export const runtime = "nodejs";
 
@@ -17,7 +16,6 @@ function isAdminSession(session: any) {
 const ALLOWED_TYPES = new Set(["DOCUMENT", "IMAGE", "VIDEO"]);
 
 const ALLOWED_CATEGORIES = new Set([
-  // Documents (Core)
   "PRODUCT_CATALOGUE_FULL",
   "COLLECTION_CATALOGUE",
   "TECHNICAL_DATA_SHEET",
@@ -27,19 +25,13 @@ const ALLOWED_CATEGORIES = new Set([
   "BROCHURE_SHORT",
   "COMPANY_PROFILE_PDF",
   "OTHERS_DOCUMENTS",
-
-  // Sales Tools
   "SAMPLE_KIT_GUIDE",
   "PROJECT_REFERENCE_LIST",
-
-  // Images (Project)
   "PROJECT_HOTEL",
   "PROJECT_VILLA",
   "PROJECT_COMMERCIAL_FACADE",
   "PROJECT_INTERIOR_WALL",
   "PROJECT_BEFORE_AFTER",
-
-  // Videos
   "VIDEO_INSTALLATION",
   "VIDEO_PROJECT_SHOWCASE",
   "VIDEO_PRODUCT_HIGHLIGHT",
@@ -58,6 +50,12 @@ function extFromMime(mime: string) {
   return "";
 }
 
+function resourceTypeFromAssetType(type: string): "raw" | "image" | "video" {
+  if (type === "DOCUMENT") return "raw";
+  if (type === "IMAGE") return "image";
+  return "video";
+}
+
 // GET /api/admin/marketing
 export async function GET() {
   const session = await getServerSession();
@@ -72,20 +70,12 @@ export async function GET() {
 }
 
 // POST /api/admin/marketing
-// A) multipart/form-data upload (DOCUMENT/IMAGE/VIDEO file)
-// fields: title, type, category, collection?, stoneType?, description?, file
-//
-// B) application/json for link-based VIDEO
-// { title, type:"VIDEO", category, externalUrl, collection?, stoneType?, description? }
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!isAdminSession(session)) return jsonError("Unauthorized", 401);
 
   const contentType = req.headers.get("content-type") || "";
 
-  // -----------------------
-  // B) JSON (link-based video)
-  // -----------------------
   if (contentType.includes("application/json")) {
     const body = await req.json().catch(() => null);
     if (!body) return jsonError("Invalid JSON", 400);
@@ -118,9 +108,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, item: created });
   }
 
-  // -----------------------
-  // A) multipart upload
-  // -----------------------
   if (!contentType.includes("multipart/form-data")) {
     return jsonError("Unsupported content-type. Use multipart/form-data or application/json", 415);
   }
@@ -133,7 +120,6 @@ export async function POST(req: Request) {
   const collection = String(form.get("collection") || "").trim();
   const stoneType = String(form.get("stoneType") || "").trim();
   const description = String(form.get("description") || "").trim();
-
   const file = form.get("file") as File | null;
 
   if (!title) return jsonError("Missing title", 400);
@@ -141,18 +127,18 @@ export async function POST(req: Request) {
   if (!ALLOWED_CATEGORIES.has(category)) return jsonError("Invalid category", 400);
   if (!file) return jsonError("Missing file", 400);
 
-  // Validate mime by type
   const mime = file.type;
   if (type === "DOCUMENT" && mime !== "application/pdf") return jsonError("Document must be PDF", 400);
-  if (type === "IMAGE" && !["image/jpeg", "image/png", "image/webp"].includes(mime))
+  if (type === "IMAGE" && !["image/jpeg", "image/png", "image/webp"].includes(mime)) {
     return jsonError("Image must be JPG/PNG/WEBP", 400);
-  if (type === "VIDEO" && !["video/mp4", "video/webm"].includes(mime))
+  }
+  if (type === "VIDEO" && !["video/mp4", "video/webm"].includes(mime)) {
     return jsonError("Video must be MP4/WEBM", 400);
+  }
 
   const ext = extFromMime(mime);
   if (!ext) return jsonError("Unsupported file type", 400);
 
-  // Create DB record first to get ID
   const created = await prisma.marketingAsset.create({
     data: {
       title,
@@ -167,22 +153,21 @@ export async function POST(req: Request) {
     },
   });
 
-  // Save file
-  const dir = marketingDirForType(type);
-  await mkdir(dir, { recursive: true });
+  const buffer = Buffer.from(await file.arrayBuffer());
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const filePath = marketingFilePath(type, created.id, ext);
-  await writeFile(filePath, buf);
-
-  // Update record with secure download URL + filePath
-  const downloadUrl = `/api/marketing/${created.id}/download`;
+  const uploaded = await uploadBufferToCloudinary({
+    buffer,
+    folder: `casadenza/marketing/${type.toLowerCase()}`,
+    publicId: created.id,
+    resourceType: resourceTypeFromAssetType(type),
+    filename: `${created.id}.${ext}`,
+  });
 
   const updated = await prisma.marketingAsset.update({
     where: { id: created.id },
     data: {
-      filePath,
-      fileUrl: downloadUrl,
+      filePath: uploaded.publicId,
+      fileUrl: uploaded.secureUrl,
     },
   });
 

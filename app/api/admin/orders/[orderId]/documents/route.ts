@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "@/lib/serverSession";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { uploadBufferToCloudinary } from "@/lib/cloudinary";
 
 export const runtime = "nodejs";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
-}
-
-function docsRoot() {
-  // project root/storage/documents
-  return path.join(process.cwd(), "storage", "documents");
 }
 
 export async function POST(req: Request, ctx: { params: { orderId: string } }) {
@@ -33,28 +27,29 @@ export async function POST(req: Request, ctx: { params: { orderId: string } }) {
   if (!file) return jsonError("Missing file", 400);
   if (file.type !== "application/pdf") return jsonError("Only PDF allowed", 400);
 
-  // 1) create DB record first (need docId for deterministic filename)
   const created = await prisma.orderDocument.create({
     data: {
       orderId,
       title: title || type.replaceAll("_", " "),
-      url: "", // will update after save
+      url: "",
     },
   });
 
-  // 2) save file to storage/documents/{orderId}/{docId}.pdf
-  const dir = path.join(docsRoot(), orderId);
-  await mkdir(dir, { recursive: true });
+  const buffer = Buffer.from(await file.arrayBuffer());
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const filePath = path.join(dir, `${created.id}.pdf`);
-  await writeFile(filePath, buf);
+  const uploaded = await uploadBufferToCloudinary({
+    buffer,
+    folder: `casadenza/documents/${orderId}`,
+    publicId: created.id,
+    resourceType: "raw",
+    filename: `${created.id}.pdf`,
+  });
 
-  // 3) update URL to secure download endpoint
-  const url = `/api/documents/${created.id}/download`;
   const updated = await prisma.orderDocument.update({
     where: { id: created.id },
-    data: { url },
+    data: {
+      url: uploaded.secureUrl,
+    },
   });
 
   return NextResponse.json({ ok: true, document: updated });
