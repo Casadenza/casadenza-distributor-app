@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "@/lib/serverSession";
 import { uploadBufferToCloudinary } from "@/lib/cloudinary";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,8 @@ const ALLOWED_CATEGORIES = new Set([
   "VIDEO_REELS_SHORT",
 ]);
 
+const MAX_FILE_MB = 25;
+
 function extFromMime(mime: string) {
   if (mime === "application/pdf") return "pdf";
   if (mime === "image/jpeg") return "jpg";
@@ -56,7 +59,6 @@ function resourceTypeFromAssetType(type: string): "raw" | "image" | "video" {
   return "video";
 }
 
-// GET /api/admin/marketing
 export async function GET() {
   const session = await getServerSession();
   if (!isAdminSession(session)) return jsonError("Unauthorized", 401);
@@ -69,10 +71,15 @@ export async function GET() {
   return NextResponse.json({ ok: true, items });
 }
 
-// POST /api/admin/marketing
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!isAdminSession(session)) return jsonError("Unauthorized", 401);
+
+  const ip = getClientIp(req);
+  const limit = checkRateLimit(`marketing-upload:${ip}`, 10, 60 * 1000);
+  if (!limit.ok) {
+    return jsonError("Too many upload attempts. Please try again in 1 minute.", 429);
+  }
 
   const contentType = req.headers.get("content-type") || "";
 
@@ -109,7 +116,7 @@ export async function POST(req: Request) {
   }
 
   if (!contentType.includes("multipart/form-data")) {
-    return jsonError("Unsupported content-type. Use multipart/form-data or application/json", 415);
+    return jsonError("Unsupported content-type", 415);
   }
 
   const form = await req.formData();
@@ -127,17 +134,37 @@ export async function POST(req: Request) {
   if (!ALLOWED_CATEGORIES.has(category)) return jsonError("Invalid category", 400);
   if (!file) return jsonError("Missing file", 400);
 
+  const sizeMB = file.size / 1024 / 1024;
+  if (sizeMB > MAX_FILE_MB) {
+    return jsonError(`File too large. Max allowed ${MAX_FILE_MB}MB`, 400);
+  }
+
   const mime = file.type;
-  if (type === "DOCUMENT" && mime !== "application/pdf") return jsonError("Document must be PDF", 400);
+
+  if (type === "DOCUMENT" && mime !== "application/pdf") {
+    return jsonError("Document must be PDF", 400);
+  }
+
   if (type === "IMAGE" && !["image/jpeg", "image/png", "image/webp"].includes(mime)) {
     return jsonError("Image must be JPG/PNG/WEBP", 400);
   }
+
   if (type === "VIDEO" && !["video/mp4", "video/webm"].includes(mime)) {
     return jsonError("Video must be MP4/WEBM", 400);
   }
 
   const ext = extFromMime(mime);
   if (!ext) return jsonError("Unsupported file type", 400);
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const upload = await uploadBufferToCloudinary({
+    buffer,
+    folder: `casadenza/marketing/${type.toLowerCase()}`,
+    publicId: crypto.randomUUID(),
+    resourceType: resourceTypeFromAssetType(type),
+    filename: `${crypto.randomUUID()}.${ext}`,
+  });
 
   const created = await prisma.marketingAsset.create({
     data: {
@@ -149,27 +176,11 @@ export async function POST(req: Request) {
       description: description || null,
       mimeType: mime,
       fileSize: file.size,
+      fileUrl: upload.secureUrl,
+      filePath: upload.publicId,
       isActive: true,
     },
   });
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const uploaded = await uploadBufferToCloudinary({
-    buffer,
-    folder: `casadenza/marketing/${type.toLowerCase()}`,
-    publicId: created.id,
-    resourceType: resourceTypeFromAssetType(type),
-    filename: `${created.id}.${ext}`,
-  });
-
-  const updated = await prisma.marketingAsset.update({
-    where: { id: created.id },
-    data: {
-      filePath: uploaded.publicId,
-      fileUrl: uploaded.secureUrl,
-    },
-  });
-
-  return NextResponse.json({ ok: true, item: updated });
+  return NextResponse.json({ ok: true, item: created });
 }

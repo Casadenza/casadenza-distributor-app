@@ -2,44 +2,14 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { createSession } from "@/lib/serverSession";
-
-// Simple in-memory rate limit
-const loginAttempts = new Map<string, { count: number; time: number }>();
-
-function checkRateLimit(ip: string) {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxAttempts = 5;
-
-  const record = loginAttempts.get(ip);
-
-  if (!record) {
-    loginAttempts.set(ip, { count: 1, time: now });
-    return true;
-  }
-
-  if (now - record.time > windowMs) {
-    loginAttempts.set(ip, { count: 1, time: now });
-    return true;
-  }
-
-  if (record.count >= maxAttempts) {
-    return false;
-  }
-
-  record.count++;
-  loginAttempts.set(ip, record);
-  return true;
-}
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
-    const ip =
-      req.headers.get("x-forwarded-for") ||
-      req.headers.get("x-real-ip") ||
-      "unknown";
+    const ip = getClientIp(req);
+    const limit = checkRateLimit(`login:${ip}`, 5, 60 * 1000);
 
-    if (!checkRateLimit(ip)) {
+    if (!limit.ok) {
       return NextResponse.json(
         { error: "Too many login attempts. Please try again in 1 minute." },
         { status: 429 }

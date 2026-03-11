@@ -29,6 +29,25 @@ export function cloudinaryConfig() {
   return cloudinary;
 }
 
+function isAllowedFolder(folder: string) {
+  const f = String(folder || "").trim().replace(/\/+$/, "");
+  if (!f) return false;
+
+  const allowedPrefixes = [
+    "casadenza/documents/",
+    "casadenza/marketing/document",
+    "casadenza/marketing/image",
+    "casadenza/marketing/video",
+    "casadenza/products",
+    "products",
+  ];
+
+  return allowedPrefixes.some((prefix) => {
+    if (prefix.endsWith("/")) return f.startsWith(prefix);
+    return f === prefix || f.startsWith(prefix + "/");
+  });
+}
+
 export async function uploadBuffer(opts: {
   buffer: Buffer;
   folder: string;
@@ -36,6 +55,10 @@ export async function uploadBuffer(opts: {
   resourceType: "image" | "raw" | "video";
   filename?: string;
 }) {
+  if (!isAllowedFolder(opts.folder)) {
+    throw new Error("Invalid upload folder");
+  }
+
   const cld = cloudinaryConfig();
 
   return await new Promise<{ secureUrl: string; publicId: string }>((resolve, reject) => {
