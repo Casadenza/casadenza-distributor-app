@@ -7,11 +7,12 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
-  
+
   if (!session) redirect("/login");
 
-  // allow ADMIN + ORDER_ADMIN
-  if (session.role !== "ADMIN" && session.role !== "ORDER_ADMIN") {
+  const role = String(session.role || "");
+
+  if (role !== "ADMIN" && role !== "ORDER_ADMIN") {
     redirect("/dashboard");
   }
 
