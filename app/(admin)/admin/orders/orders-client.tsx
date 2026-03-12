@@ -71,7 +71,6 @@ function calcGrandTotalFallback(
   );
 }
 
-/** Signature doc detection */
 function findSignatureDoc(order: any) {
   const docs: any[] = Array.isArray(order?.documents) ? order.documents : [];
   const kw = ["sign", "signature", "signed", "sig"];
@@ -82,7 +81,6 @@ function findSignatureDoc(order: any) {
   return docs.find((d) => has(d?.title) || has(d?.name) || has(d?.fileName) || has(d?.url)) || null;
 }
 
-/** Extract signature from notes JSON fallback */
 function getSignatureFromNotes(meta: any) {
   const signerName =
     meta?.signerName ||
@@ -105,7 +103,6 @@ function getSignatureFromNotes(meta: any) {
   return { signerName, signatureDataUrl };
 }
 
-// Classic palette pills
 function statusPill(status: string) {
   switch (status) {
     case "RECEIVED":
@@ -154,7 +151,13 @@ function endOfDayTs(dateStr: string) {
   return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
 }
 
-export default function OrdersAdminClient({ initialItems }: { initialItems: any[] }) {
+export default function OrdersAdminClient({
+  initialItems,
+  userRole,
+}: {
+  initialItems: any[];
+  userRole?: string;
+}) {
   const [items, setItems] = useState<any[]>(initialItems || []);
   const [q, setQ] = useState("");
 
@@ -165,6 +168,8 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
 
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const canManageOrders = userRole === "ADMIN" || userRole === "ORDER_ADMIN";
 
   const distributorOptions = useMemo(() => {
     const set = new Set<string>();
@@ -224,6 +229,7 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
   }, [items, q, fStatus, fDistributor, dateFrom, dateTo]);
 
   async function updateOrder(id: string, patch: { status?: string; eta?: string | null }) {
+    if (!canManageOrders) return;
     setSavingId(id);
     try {
       const res = await fetch("/api/admin/orders", {
@@ -259,19 +265,19 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
     window.location.reload();
   }
 
-  // Premium font stack (no heavy bold)
   const premiumFont =
     "font-[ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'SF_Pro_Text','SF_Pro_Display','Inter','Geist',Segoe_UI,Roboto,Helvetica,Arial]";
 
   return (
     <div className={cn("space-y-4 text-[#1A1A1A]", premiumFont, "[-webkit-font-smoothing:antialiased]")}>
-      {/* Title */}
       <div className="flex items-end justify-between">
         <div>
           <div className="text-[11px] font-normal text-[#A39E93] uppercase tracking-wide">
             Admin / Orders
           </div>
-          <div className="text-[16px] font-semibold text-[#1A1A1A] tracking-tight">Orders</div>
+          <div className="text-[16px] font-semibold text-[#1A1A1A] tracking-tight">
+            {userRole === "ORDER_ADMIN" ? "Order Hub" : "Orders"}
+          </div>
         </div>
 
         <div className="text-[10px] font-normal uppercase text-[#A39E93]">
@@ -279,7 +285,6 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
         </div>
       </div>
 
-      {/* Sticky Filter Header */}
       <div className="sticky top-[64px] z-[60]">
         <div className="bg-[#FAF9F6] border border-[#EAE7E2] rounded-2xl p-3 flex flex-wrap items-center gap-4 shadow-[0_6px_18px_rgba(0,0,0,0.06)]">
           <div className="flex items-center gap-3 border-r pr-4 border-[#EAE7E2]">
@@ -331,7 +336,6 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
         </div>
       </div>
 
-      {/* Orders List + Internal Scrollbar */}
       <div className="bg-white border border-[#EAE7E2] rounded-2xl overflow-hidden shadow-sm">
         <div
           className={cn(
@@ -493,7 +497,6 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
                     </div>
                   </div>
 
-                  {/* Expand */}
                   <div
                     className={cn(
                       "grid transition-all duration-250 ease-out",
@@ -571,9 +574,9 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
                             <span className="text-[11px] text-[#A39E93] font-normal">Status</span>
                             <select
                               value={o.status}
-                              disabled={saving}
+                              disabled={saving || !canManageOrders}
                               onChange={(e) => updateOrder(o.id, { status: e.target.value })}
-                              className="bg-white border border-[#EAE7E2] rounded-lg px-2 py-1 text-[11px] font-normal uppercase outline-none cursor-pointer focus:border-[#C5A267]"
+                              className="bg-white border border-[#EAE7E2] rounded-lg px-2 py-1 text-[11px] font-normal uppercase outline-none cursor-pointer focus:border-[#C5A267] disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               {STATUSES.map((s) => (
                                 <option key={s} value={s}>
@@ -587,15 +590,14 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
                             <div className="text-[8px] font-normal text-[#A39E93] uppercase tracking-wide">ETA</div>
                             <input
                               defaultValue={o.eta || ""}
-                              disabled={saving}
+                              disabled={saving || !canManageOrders}
                               placeholder="YYYY-MM-DD"
                               onBlur={(e) => updateOrder(o.id, { eta: e.target.value || null })}
-                              className="mt-1 w-full bg-white border border-[#EAE7E2] rounded-xl px-3 py-2 text-[12px] outline-none focus:border-[#C5A267] font-normal"
+                              className="mt-1 w-full bg-white border border-[#EAE7E2] rounded-xl px-3 py-2 text-[12px] outline-none focus:border-[#C5A267] font-normal disabled:opacity-60 disabled:cursor-not-allowed"
                             />
                           </div>
                         </Panel>
 
-                        {/* Items */}
                         <div className="lg:col-span-3 bg-white border border-[#EAE7E2] rounded-2xl overflow-hidden shadow-sm">
                           <div className="px-4 py-3 bg-[#FAF9F6] border-b border-[#F0EDE8]">
                             <div className="text-[9px] font-normal text-[#A39E93] uppercase tracking-widest">
@@ -647,14 +649,12 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
                           </div>
                         </div>
 
-                        {/* Notes (above signature) */}
                         <Panel className="lg:col-span-3" title="Notes">
                           <div className="text-[12px] text-[#6B665C] font-normal whitespace-pre-wrap">
                             {meta?.notes ? String(meta.notes) : "-"}
                           </div>
                         </Panel>
 
-                        {/* Signature (under Notes) */}
                         <div className="lg:col-span-3 bg-[#FAF9F6] border border-[#EAE7E2] rounded-2xl p-2 shadow-sm">
                           <div className="flex items-center justify-between">
                             <div className="text-[9px] font-normal text-[#A39E93] uppercase tracking-widest">
@@ -685,7 +685,6 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
                                   <div className="pointer-events-none absolute right-2 top-2 text-[9px] font-normal uppercase text-[#C5A267]/25 tracking-widest">
                                     VERIFIED
                                   </div>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
                                     src={signatureSrc}
                                     alt="Signature"
@@ -709,7 +708,6 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
                       </div>
                     </div>
                   </div>
-
                 </div>
               </div>
             );
@@ -723,8 +721,6 @@ export default function OrdersAdminClient({ initialItems }: { initialItems: any[
     </div>
   );
 }
-
-/** ===== UI helpers ===== */
 
 function MiniSelect({
   label,

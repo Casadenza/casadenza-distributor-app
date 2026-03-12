@@ -51,7 +51,13 @@ export async function POST(req: Request) {
       distributorId: user.distributor?.id ?? null,
     });
 
-    const redirectTo = user.role === "ADMIN" ? "/admin" : "/dashboard";
+    const redirectTo =
+      user.role === "ADMIN"
+        ? "/admin"
+        : user.role === "ORDER_ADMIN"
+        ? "/admin/orders"
+        : "/dashboard";
+
     return NextResponse.json({ ok: true, redirectTo }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Login failed" }, { status: 500 });

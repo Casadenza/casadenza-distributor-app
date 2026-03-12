@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminOrdersPage() {
   const session = await getServerSession();
-  if (!session || session.role !== "ADMIN") {
+  const role = String(session?.role || "");
+
+  if (!session || (role !== "ADMIN" && role !== "ORDER_ADMIN")) {
     return <div className="p-6 text-sm text-zinc-600">Unauthorized</div>;
   }
 
@@ -25,5 +27,10 @@ export default async function AdminOrdersPage() {
     take: 2000,
   });
 
-  return <OrdersAdminClient initialItems={items as any} />;
+  return (
+    <OrdersAdminClient
+      initialItems={items as any}
+      userRole={role}
+    />
+  );
 }

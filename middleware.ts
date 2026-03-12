@@ -32,15 +32,20 @@ function addSecurityHeaders(res: NextResponse) {
   return res;
 }
 
+function isOrderAdminAllowedPath(pathname: string) {
+  return (
+    pathname === "/admin/orders" ||
+    pathname.startsWith("/admin/orders/print/")
+  );
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Never redirect API routes to /login
   if (pathname.startsWith("/api")) {
     return addSecurityHeaders(NextResponse.next());
   }
 
-  // Public / static routes
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/_next") ||
@@ -54,7 +59,6 @@ export async function middleware(req: NextRequest) {
 
   const session = await getSession(req);
 
-  // Not logged in -> go login with next=
   if (!session?.userId) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
@@ -62,45 +66,65 @@ export async function middleware(req: NextRequest) {
     return addSecurityHeaders(NextResponse.redirect(url));
   }
 
-  const role = session.role as "ADMIN" | "DISTRIBUTOR";
+  const role = String(session.role || "") as "ADMIN" | "ORDER_ADMIN" | "DISTRIBUTOR";
 
-  // Root -> role home
   if (pathname === "/") {
     const url = req.nextUrl.clone();
-    url.pathname = role === "ADMIN" ? "/admin" : "/dashboard";
+    url.pathname =
+      role === "ADMIN"
+        ? "/admin"
+        : role === "ORDER_ADMIN"
+        ? "/admin/orders"
+        : "/dashboard";
     return addSecurityHeaders(NextResponse.redirect(url));
   }
 
-  // Block legacy admin path under dashboard
   if (pathname.startsWith("/dashboard/admin")) {
     const url = req.nextUrl.clone();
-    url.pathname = role === "ADMIN" ? "/admin" : "/dashboard";
+    url.pathname =
+      role === "ADMIN"
+        ? "/admin"
+        : role === "ORDER_ADMIN"
+        ? "/admin/orders"
+        : "/dashboard";
     return addSecurityHeaders(NextResponse.redirect(url));
   }
 
-  // ADMIN area
   if (pathname.startsWith("/admin")) {
-    if (role !== "ADMIN") {
+    if (role === "ADMIN") {
+      return addSecurityHeaders(NextResponse.next());
+    }
+
+    if (role === "ORDER_ADMIN") {
+      if (isOrderAdminAllowedPath(pathname)) {
+        return addSecurityHeaders(NextResponse.next());
+      }
       const url = req.nextUrl.clone();
-      url.pathname = "/dashboard";
+      url.pathname = "/admin/orders";
       return addSecurityHeaders(NextResponse.redirect(url));
     }
-    return addSecurityHeaders(NextResponse.next());
+
+    const url = req.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return addSecurityHeaders(NextResponse.redirect(url));
   }
 
-  // DISTRIBUTOR area
   if (pathname.startsWith("/dashboard")) {
     if (role !== "DISTRIBUTOR") {
       const url = req.nextUrl.clone();
-      url.pathname = "/admin";
+      url.pathname = role === "ORDER_ADMIN" ? "/admin/orders" : "/admin";
       return addSecurityHeaders(NextResponse.redirect(url));
     }
     return addSecurityHeaders(NextResponse.next());
   }
 
-  // Any other route -> send to role home
   const url = req.nextUrl.clone();
-  url.pathname = role === "ADMIN" ? "/admin" : "/dashboard";
+  url.pathname =
+    role === "ADMIN"
+      ? "/admin"
+      : role === "ORDER_ADMIN"
+      ? "/admin/orders"
+      : "/dashboard";
   return addSecurityHeaders(NextResponse.redirect(url));
 }
 

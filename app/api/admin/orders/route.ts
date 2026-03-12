@@ -16,9 +16,15 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
+function canAccessOrders(role: string) {
+  return role === "ADMIN" || role === "ORDER_ADMIN";
+}
+
 export async function GET() {
   const session = await getServerSession();
-  if (!session || session.role !== "ADMIN") {
+  const role = String(session?.role || "");
+
+  if (!session || !canAccessOrders(role)) {
     return jsonError("Unauthorized", 401);
   }
 
@@ -28,7 +34,7 @@ export async function GET() {
       items: {
         include: {
           product: true,
-          variant: true,   // 👈 IMPORTANT (make sure relation exists)
+          variant: true,
         },
       },
       documents: true,
@@ -42,7 +48,11 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   const session = await getServerSession();
-  if (!session || session.role !== "ADMIN") return jsonError("Unauthorized", 401);
+  const role = String(session?.role || "");
+
+  if (!session || !canAccessOrders(role)) {
+    return jsonError("Unauthorized", 401);
+  }
 
   const body = await req.json();
   const id = String(body?.id || "");
@@ -50,7 +60,9 @@ export async function PATCH(req: Request) {
   const eta = body?.eta !== undefined ? (body.eta ? String(body.eta) : null) : undefined;
 
   if (!id) return jsonError("Missing id", 400);
-  if (status && !ADMIN_STATUSES.includes(status as any)) return jsonError("Invalid status", 400);
+  if (status && !ADMIN_STATUSES.includes(status as any)) {
+    return jsonError("Invalid status", 400);
+  }
 
   const updated = await prisma.order.update({
     where: { id },
