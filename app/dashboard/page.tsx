@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/serverSession";
 import { prisma } from "@/lib/db";
+import DashboardAutoRefresh from "./dashboard-auto-refresh";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -119,6 +120,27 @@ function getStatusStyle(status: string) {
   }
 }
 
+function isFreshOrder(createdAt: any) {
+  const ts = new Date(createdAt).getTime();
+  if (!Number.isFinite(ts)) return false;
+  return Date.now() - ts <= 1000 * 60 * 60 * 24;
+}
+
+function getTimeLabel(createdAt: any, index: number) {
+  const ts = new Date(createdAt).getTime();
+  if (!Number.isFinite(ts)) return index === 0 ? "now" : `${index + 1}d`;
+
+  const diffMs = Date.now() - ts;
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHr = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDay = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMin < 1) return "now";
+  if (diffMin < 60) return `${diffMin}m`;
+  if (diffHr < 24) return `${diffHr}h`;
+  return `${Math.max(diffDay, 1)}d`;
+}
+
 export default async function SlimPremiumDashboard() {
   const session = await getServerSession();
   if (!session) redirect("/login");
@@ -158,20 +180,33 @@ export default async function SlimPremiumDashboard() {
 
   const streamItems = recentOrders.length
     ? recentOrders.map((order: any, index: number) => ({
+        id: order.id,
+        href: `/dashboard/my-orders/print/${order.id}`,
         t: getDashboardPoLabel(order),
         status: String(order?.status || "PENDING").toUpperCase(),
         d:
           order?.documents?.length > 0
             ? `${order.documents.length} document${order.documents.length > 1 ? "s" : ""} available for this order.`
             : "status updated.",
-        s: index === 0 ? "now" : `${index + 1}d`,
+        s: getTimeLabel(order?.createdAt, index),
+        isNew: index === 0 || isFreshOrder(order?.createdAt),
       }))
     : [
-        { t: "No Recent Orders", d: "Your latest distributor activity will appear here.", s: "—", status: "PENDING" },
+        {
+          id: "empty",
+          href: "/dashboard/my-orders",
+          t: "No Recent Orders",
+          d: "Your latest distributor activity will appear here.",
+          s: "—",
+          status: "PENDING",
+          isNew: false,
+        },
       ];
 
   return (
     <div className="max-w-[1100px] mx-auto space-y-4 py-2 animate-in fade-in duration-1000">
+      <DashboardAutoRefresh intervalMs={15000} />
+
       <div className="flex items-center justify-between border-b border-[#F0EDE8] pb-4">
         <div>
           <div className="flex items-center gap-2 mb-0.5">
@@ -229,31 +264,62 @@ export default async function SlimPremiumDashboard() {
           </div>
 
           <div className="space-y-4">
-            {streamItems.map((log, i) => (
-              <div key={i} className="flex justify-between items-center group border-b border-[#FAF9F6] last:border-0 pb-3">
-                <div className="flex gap-3 items-center">
-                  <div className="h-1 w-1 rounded-full bg-[#EAE7E2] group-hover:bg-[#C5A267] transition-all" />
-                  <div>
-                    <h4 className="text-[12px] font-semibold text-[#1A1A1A] group-hover:italic leading-none">{log.t}</h4>
-
-                    {log.t === "No Recent Orders" ? (
-                      <p className="text-[9px] text-[#A39E93] mt-1 leading-none">{log.d}</p>
-                    ) : (
-                      <div className="mt-1 flex items-center gap-2">
-                        <span
-                          className={`text-[8px] font-bold border px-1.5 py-0.5 rounded-sm uppercase ${getStatusStyle(
-                            log.status
-                          )}`}
-                        >
-                          {log.status.replaceAll("_", " ")}
-                        </span>
-                        <span className="text-[9px] text-[#A39E93]">{log.d}</span>
+            {streamItems.map((log) => (
+              <Link
+                key={log.id}
+                href={log.href}
+                className={`block rounded-[18px] transition-all ${
+                  log.t === "No Recent Orders"
+                    ? "hover:bg-transparent"
+                    : log.isNew
+                    ? "border border-[#E7D3A8] bg-[#FFF9F0] shadow-[0_10px_30px_rgba(197,162,103,0.10)] hover:border-[#C5A267] hover:shadow-[0_14px_34px_rgba(197,162,103,0.16)]"
+                    : "hover:bg-[#FCFBF8]"
+                }`}
+              >
+                <div className="flex justify-between items-center group border-b border-[#FAF9F6] last:border-0 px-3 py-3">
+                  <div className="flex gap-3 items-center min-w-0">
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full transition-all ${
+                        log.isNew ? "bg-[#C5A267]" : "bg-[#EAE7E2] group-hover:bg-[#C5A267]"
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-[12px] font-semibold text-[#1A1A1A] group-hover:italic leading-none truncate">
+                          {log.t}
+                        </h4>
+                        {log.isNew && log.t !== "No Recent Orders" ? (
+                          <span className="inline-flex items-center rounded-full bg-[#C5A267] px-1.5 py-[2px] text-[7px] font-bold uppercase tracking-wider text-white">
+                            New
+                          </span>
+                        ) : null}
                       </div>
-                    )}
+
+                      {log.t === "No Recent Orders" ? (
+                        <p className="text-[9px] text-[#A39E93] mt-1 leading-none">{log.d}</p>
+                      ) : (
+                        <div className="mt-1 flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-[8px] font-bold border px-1.5 py-0.5 rounded-sm uppercase ${getStatusStyle(
+                              log.status
+                            )}`}
+                          >
+                            {log.status.replaceAll("_", " ")}
+                          </span>
+                          <span className="text-[9px] text-[#A39E93]">{log.d}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[8px] font-bold text-[#D7D0C3] uppercase italic">{log.s}</span>
+                    {log.t !== "No Recent Orders" ? (
+                      <ArrowUpRight size={12} className="text-[#D7D0C3] group-hover:text-[#C5A267] transition-all" />
+                    ) : null}
                   </div>
                 </div>
-                <span className="text-[8px] font-bold text-[#EAE7E2] uppercase italic">{log.s}</span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
