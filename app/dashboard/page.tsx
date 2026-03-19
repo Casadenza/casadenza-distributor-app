@@ -10,7 +10,6 @@ import {
   Truck,
   Files,
   ArrowRight,
-  Sparkles,
   Calculator,
 } from "lucide-react";
 
@@ -67,6 +66,59 @@ function SlimActionCard({ title, desc, href, icon: Icon, badge }: any) {
   );
 }
 
+function safeParseNotes(notes: any) {
+  if (!notes) return null;
+  try {
+    const obj = JSON.parse(String(notes));
+    return obj && typeof obj === "object" ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+function getDashboardPoLabel(order: any) {
+  const meta = safeParseNotes(order?.notes) || {};
+
+  const raw =
+    meta?.poNumber ||
+    order?.poNumber ||
+    meta?.poNo ||
+    order?.poNo ||
+    meta?.orderNumber ||
+    order?.orderNumber ||
+    "";
+
+  if (!raw) return `Order ${String(order?.id || "").slice(-6)}`;
+
+  const po = String(raw).trim();
+  if (!po) return `Order ${String(order?.id || "").slice(-6)}`;
+
+  return po.toUpperCase().startsWith("PO-") ? po : `PO-${po}`;
+}
+
+function getStatusStyle(status: string) {
+  switch (status) {
+    case "RECEIVED":
+      return "bg-slate-50 text-slate-600 border-slate-200";
+    case "CONFIRMED":
+      return "bg-indigo-50 text-indigo-600 border-indigo-200";
+    case "IN_PRODUCTION":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    case "PACKED":
+      return "bg-orange-50 text-orange-700 border-orange-200";
+    case "DISPATCHED":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "DELIVERED":
+      return "bg-teal-50 text-teal-700 border-teal-200";
+    case "CANCELLED":
+      return "bg-rose-50 text-rose-600 border-rose-200";
+    case "PENDING":
+      return "bg-zinc-50 text-zinc-500 border-zinc-200";
+    default:
+      return "bg-zinc-50 text-zinc-500 border-zinc-200";
+  }
+}
+
 export default async function SlimPremiumDashboard() {
   const session = await getServerSession();
   if (!session) redirect("/login");
@@ -106,15 +158,16 @@ export default async function SlimPremiumDashboard() {
 
   const streamItems = recentOrders.length
     ? recentOrders.map((order: any, index: number) => ({
-        t: `PO #${String(order?.id || "").slice(-4)} Update`,
+        t: getDashboardPoLabel(order),
+        status: String(order?.status || "PENDING").toUpperCase(),
         d:
           order?.documents?.length > 0
             ? `${order.documents.length} document${order.documents.length > 1 ? "s" : ""} available for this order.`
-            : `${String(order?.status || "PENDING").replaceAll("_", " ")} status updated.`,
+            : "status updated.",
         s: index === 0 ? "now" : `${index + 1}d`,
       }))
     : [
-        { t: "No Recent Orders", d: "Your latest distributor activity will appear here.", s: "—" },
+        { t: "No Recent Orders", d: "Your latest distributor activity will appear here.", s: "—", status: "PENDING" },
       ];
 
   return (
@@ -167,7 +220,10 @@ export default async function SlimPremiumDashboard() {
         <div className="lg:col-span-8 bg-white border border-[#EAE7E2] rounded-[24px] p-5">
           <div className="flex items-center justify-between mb-5 border-b border-[#FAF9F6] pb-3">
             <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1A1A1A]">Terminal Stream</h2>
-            <Link href="/dashboard/my-orders" className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-[#C5A267] hover:gap-2 transition-all">
+            <Link
+              href="/dashboard/my-orders"
+              className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-[#C5A267] hover:gap-2 transition-all"
+            >
               Log <ChevronRight size={8} />
             </Link>
           </div>
@@ -179,7 +235,21 @@ export default async function SlimPremiumDashboard() {
                   <div className="h-1 w-1 rounded-full bg-[#EAE7E2] group-hover:bg-[#C5A267] transition-all" />
                   <div>
                     <h4 className="text-[12px] font-semibold text-[#1A1A1A] group-hover:italic leading-none">{log.t}</h4>
-                    <p className="text-[9px] text-[#A39E93] mt-1 leading-none">{log.d}</p>
+
+                    {log.t === "No Recent Orders" ? (
+                      <p className="text-[9px] text-[#A39E93] mt-1 leading-none">{log.d}</p>
+                    ) : (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span
+                          className={`text-[8px] font-bold border px-1.5 py-0.5 rounded-sm uppercase ${getStatusStyle(
+                            log.status
+                          )}`}
+                        >
+                          {log.status.replaceAll("_", " ")}
+                        </span>
+                        <span className="text-[9px] text-[#A39E93]">{log.d}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <span className="text-[8px] font-bold text-[#EAE7E2] uppercase italic">{log.s}</span>
@@ -199,17 +269,33 @@ export default async function SlimPremiumDashboard() {
                   : "No new technical files available right now."}
               </p>
             </div>
-            <Link href="/dashboard/documents" className="inline-flex items-center justify-center gap-2 bg-[#C5A267] text-white text-center py-2 rounded-full text-[8px] font-bold uppercase tracking-widest hover:scale-105 transition-all">
+            <Link
+              href="/dashboard/documents"
+              className="inline-flex items-center justify-center gap-2 bg-[#C5A267] text-white text-center py-2 rounded-full text-[8px] font-bold uppercase tracking-widest hover:scale-105 transition-all"
+            >
               Open Archive <ArrowRight size={12} />
             </Link>
           </div>
 
           <div className="flex gap-2">
-            <Link href="/dashboard/training" className="flex-1 py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all">Academy</Link>
-            <Link href="/dashboard/new-arrivals" className="flex-1 py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all">New Arrivals</Link>
+            <Link
+              href="/dashboard/training"
+              className="flex-1 py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all"
+            >
+              Academy
+            </Link>
+            <Link
+              href="/dashboard/new-arrivals"
+              className="flex-1 py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all"
+            >
+              New Arrivals
+            </Link>
           </div>
 
-          <Link href="/dashboard/packing-calculator" className="block py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all">
+          <Link
+            href="/dashboard/packing-calculator"
+            className="block py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all"
+          >
             Calculator
           </Link>
         </div>
