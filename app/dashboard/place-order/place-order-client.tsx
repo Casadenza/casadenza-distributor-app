@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, RefreshCw, Package, Truck, Calendar, CreditCard, FileSignature } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  RefreshCw,
+  Package,
+  Truck,
+  Calendar,
+  CreditCard,
+  FileSignature,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+} from "lucide-react";
 
 // ---------------- Types ----------------
 type Product = { id: string; sku: string; name: string };
@@ -62,8 +74,19 @@ type Line = {
   unitPrice: number;
 };
 
+type PopupState = {
+  open: boolean;
+  type: "success" | "error";
+  title: string;
+  message: string;
+};
+
+// ---------------- Helpers ----------------
 function money(n: any) {
-  return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(n || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function safeJson(str: any) {
@@ -83,6 +106,43 @@ async function fileToDataUrl(file: File): Promise<string> {
     r.onerror = () => reject(new Error("File read failed"));
     r.readAsDataURL(file);
   });
+}
+
+function lineTemplate(): Line {
+  return {
+    collection: "All",
+    sku: "",
+    productName: "",
+    variantId: "",
+    sizeLabel: "",
+    unit: "SHEET",
+    qty: 1,
+    unitPrice: 0,
+  };
+}
+
+function getRepeatOrderLabel(order: any) {
+  const meta = safeJson(order?.notes);
+  const raw =
+    meta?.poNumber ||
+    order?.poNumber ||
+    meta?.poNo ||
+    order?.poNo ||
+    meta?.orderNumber ||
+    order?.orderNumber ||
+    "";
+
+  if (!raw) return `Order ${String(order?.id).slice(-6)}`;
+  return String(raw).toUpperCase().startsWith("PO-") ? String(raw) : `PO-${String(raw)}`;
+}
+
+function hasPriceForUnit(row: PricingRow | undefined, unit: Unit) {
+  return Number(row?.price?.unitPrices?.[unit] || 0) > 0;
+}
+
+function hasAnyPrice(row: PricingRow | undefined) {
+  if (!row) return false;
+  return UNITS.some((u) => Number(row?.price?.unitPrices?.[u] || 0) > 0);
 }
 
 export default function PlaceOrderClient({ products }: { products: Product[] }) {
@@ -111,7 +171,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   const [previousOrders, setPreviousOrders] = useState<any[]>([]);
   const [loadingRepeat, setLoadingRepeat] = useState(false);
 
-  const [incoterm, setIncoterm] = useState<(typeof INCOTERMS)[number]>("FOB");
+  const [incoterm, setIncoterm] = useState<(typeof INCOTERMS)[number]>("EXW");
   const [deliveryMethod, setDeliveryMethod] = useState<(typeof DELIVERY)[number]>("Sea");
   const [containerType, setContainerType] = useState<"" | (typeof CONTAINERS)[number]>("20ft");
   const [packingType, setPackingType] = useState<(typeof PACKING)[number]>("Pallet");
@@ -161,30 +221,55 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   const [signatureInfo, setSignatureInfo] = useState<string>("");
 
   // ---- Items ----
-  const [lines, setLines] = useState<Line[]>([
-    { collection: "All", sku: "", productName: "", variantId: "", sizeLabel: "", unit: "SHEET", qty: 1, unitPrice: 0 },
-  ]);
+  const [lines, setLines] = useState<Line[]>([lineTemplate()]);
 
   // ---- UI status ----
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [popup, setPopup] = useState<PopupState>({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
+
+  function showPopup(type: "success" | "error", title: string, message: string) {
+    setPopup({ open: true, type, title, message });
+  }
+
+  function closePopup() {
+    setPopup((p) => ({ ...p, open: false }));
+  }
 
   // ---------------- Derived ----------------
-  const itemsTotal = useMemo(() => lines.reduce((sum, l) => sum + Number(l.qty || 0) * Number(l.unitPrice || 0), 0), [lines]);
+  const itemsTotal = useMemo(
+    () => lines.reduce((sum, l) => sum + Number(l.qty || 0) * Number(l.unitPrice || 0), 0),
+    [lines]
+  );
+
   const grandTotal = useMemo(
-    () => itemsTotal + Number(freight || 0) + Number(insurance || 0) + Number(otherCharge || 0) - Number(discount || 0),
+    () =>
+      itemsTotal +
+      Number(freight || 0) +
+      Number(insurance || 0) +
+      Number(otherCharge || 0) -
+      Number(discount || 0),
     [itemsTotal, freight, insurance, otherCharge, discount]
   );
 
   const collections = useMemo(() => {
     const s = new Set<string>();
-    for (const r of pricingRows) if (r.product?.collection) s.add(r.product.collection);
+    for (const r of pricingRows) {
+      if (r.product?.collection && hasAnyPrice(r)) s.add(r.product.collection);
+    }
     return ["All", ...Array.from(s).sort()];
   }, [pricingRows]);
 
   function rowsForCollection(collection: string) {
-    if (collection === "All") return pricingRows;
-    return pricingRows.filter((r) => r.product.collection === collection);
+    const base = collection === "All"
+      ? pricingRows
+      : pricingRows.filter((r) => r.product.collection === collection);
+
+    return base.filter((r) => hasAnyPrice(r));
   }
 
   function skusForCollection(collection: string) {
@@ -192,8 +277,10 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
     return Array.from(new Set(rows.map((r) => r.product.sku))).sort();
   }
 
-  function variantsForSku(collection: string, sku: string) {
-    return rowsForCollection(collection).filter((r) => r.product.sku === sku);
+  function variantsForSku(collection: string, sku: string, unit: Unit) {
+    return rowsForCollection(collection).filter(
+      (r) => r.product.sku === sku && hasPriceForUnit(r, unit)
+    );
   }
 
   function unitPriceForVariant(variantId: string, unit: Unit) {
@@ -207,10 +294,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   }
 
   function addLine() {
-    setLines((p) => [
-      ...p,
-      { collection: "All", sku: "", productName: "", variantId: "", sizeLabel: "", unit: "SHEET", qty: 1, unitPrice: 0 },
-    ]);
+    setLines((p) => [...p, lineTemplate()]);
   }
 
   function removeLine(i: number) {
@@ -234,19 +318,33 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
       const d: PricingResponse = await res.json();
       if (!res.ok || !d?.ok) throw new Error(d?.error || "Pricing load failed");
 
+      const validRows = (d.rows || []).filter((r) => hasAnyPrice(r));
+
       setAllowedCurrencies(d.distributor?.allowedCurrencies || ["USD"]);
-      setPricingRows(d.rows || []);
+      setPricingRows(validRows);
 
       const m = new Map<string, PricingRow>();
-      for (const r of d.rows || []) m.set(r.variant.id, r);
+      for (const r of validRows) m.set(r.variant.id, r);
       setRowByVariantId(m);
 
-      // IMPORTANT: refresh all existing lines with latest distributor scheme pricing
       setLines((prev) =>
         prev.map((line) => {
           if (!line.variantId) return line;
+
           const row = m.get(line.variantId);
-          const nextPrice = typeof row?.price?.unitPrices?.[line.unit] === "number" ? Number(row?.price?.unitPrices?.[line.unit] || 0) : 0;
+          const nextPrice = row ? unitPriceForVariant(line.variantId, line.unit) : 0;
+
+          if (!row || nextPrice <= 0) {
+            return {
+              ...line,
+              variantId: "",
+              sizeLabel: "",
+              unitPrice: 0,
+              productName: row?.product?.name || line.productName,
+              sku: row?.product?.sku || line.sku,
+              collection: row?.product?.collection || line.collection,
+            };
+          }
 
           return {
             ...line,
@@ -326,21 +424,17 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
         const variantId = String(it.variantId || "");
         const r = rowByVariantId.get(variantId);
         const unit: Unit = (it.unit || "SHEET") as Unit;
-        const collection = r?.product?.collection || "All";
-        const sku = r?.product?.sku || "";
-        const productName = r?.product?.name || "";
-        const sizeLabel = r?.variant?.sizeLabel || "";
-        const unitPrice = unitPriceForVariant(variantId, unit);
+        const canUse = r && hasPriceForUnit(r, unit);
 
         return {
-          collection,
-          sku,
-          productName,
-          variantId,
-          sizeLabel,
+          collection: r?.product?.collection || "All",
+          sku: r?.product?.sku || "",
+          productName: r?.product?.name || "",
+          variantId: canUse ? variantId : "",
+          sizeLabel: canUse ? r?.variant?.sizeLabel || "" : "",
           unit,
           qty: Number(it.qty || 1),
-          unitPrice,
+          unitPrice: canUse ? unitPriceForVariant(variantId, unit) : 0,
         };
       });
       if (newLines.length) setLines(newLines);
@@ -353,16 +447,17 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
         const variantId = String(it?.variantId || it?.variant?.id || "");
         const unit: Unit = (it?.unit || "SHEET") as Unit;
         const r = rowByVariantId.get(variantId);
+        const canUse = r && hasPriceForUnit(r, unit);
 
         return {
           collection: r?.product?.collection || "All",
           sku: it?.product?.sku || r?.product?.sku || "",
           productName: it?.product?.name || r?.product?.name || "",
-          variantId,
-          sizeLabel: it?.variant?.sizeLabel || r?.variant?.sizeLabel || "",
+          variantId: canUse ? variantId : "",
+          sizeLabel: canUse ? it?.variant?.sizeLabel || r?.variant?.sizeLabel || "" : "",
           unit,
           qty: Number(it?.qty || 1),
-          unitPrice: unitPriceForVariant(variantId, unit),
+          unitPrice: canUse ? unitPriceForVariant(variantId, unit) : 0,
         };
       });
       setLines(newLines);
@@ -393,7 +488,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   useEffect(() => {
     if (deliveryMethod !== "Sea") setContainerType("");
     else if (!containerType) setContainerType("20ft");
-  }, [deliveryMethod]);
+  }, [deliveryMethod, containerType]);
 
   // ---------------- Initial load ----------------
   useEffect(() => {
@@ -409,23 +504,58 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   // ---------------- Submit ----------------
   async function submit() {
     setSaving(true);
-    setMsg(null);
 
     try {
       if (!shipTo.country || !shipTo.address1 || !shipTo.phone) {
-        setMsg("❌ Shipping required: Country, Address 1, Phone");
+        showPopup("error", "Missing Shipping Details", "Please fill Country, Address 1, and Phone before submitting the order.");
         setSaving(false);
         return;
       }
 
       if (orderType === "Repeat" && !repeatOrderId) {
-        setMsg("❌ Repeat order selected, please choose a previous order");
+        showPopup("error", "Repeat Order Required", "Please select a previous order when Order Type is Repeat.");
+        setSaving(false);
+        return;
+      }
+
+      if (!signerName.trim()) {
+        showPopup("error", "Signer Name Required", "Please enter Signer Name to continue.");
+        setSaving(false);
+        return;
+      }
+
+      if (!signatureDataUrl) {
+        showPopup("error", "Signature Required", "Please upload Signature before submitting the order.");
+        setSaving(false);
+        return;
+      }
+
+      const incompleteLines = lines
+        .map((l, idx) => ({ ...l, idx: idx + 1 }))
+        .filter((l) => !l.variantId || !l.sku || Number(l.qty) <= 0);
+
+      if (incompleteLines.length) {
+        showPopup("error", "Incomplete Order Items", `Please complete SKU, Size and Qty for line ${incompleteLines[0].idx}.`);
+        setSaving(false);
+        return;
+      }
+
+      const noPriceLines = lines
+        .map((l, idx) => ({ ...l, idx: idx + 1 }))
+        .filter((l) => Number(l.unitPrice || 0) <= 0);
+
+      if (noPriceLines.length) {
+        showPopup(
+          "error",
+          "Price Missing",
+          `Selected size is not priced for line ${noPriceLines[0].idx}. Please choose a size that has updated pricing.`
+        );
         setSaving(false);
         return;
       }
 
       const cleanItems = lines
-        .filter((l) => l.variantId && l.sku && Number(l.qty) > 0)
+        .filter((l) => l.variantId && l.sku && Number(l.qty) > 0 && Number(l.unitPrice) > 0)
         .map((l) => {
           const productId = skuToProductId.get(String(l.sku).trim()) || "";
           return {
@@ -439,7 +569,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
         .filter((x) => x.productId);
 
       if (!cleanItems.length) {
-        setMsg("❌ Add at least 1 item (SKU + Size)");
+        showPopup("error", "No Valid Items", "Please add at least one valid item with updated pricing.");
         setSaving(false);
         return;
       }
@@ -483,8 +613,8 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
         })),
 
         signature: {
-          signerName: signerName.trim() || undefined,
-          dataUrl: signatureDataUrl || undefined,
+          signerName: signerName.trim(),
+          dataUrl: signatureDataUrl,
         },
         signatureInfo: signatureInfo.trim() || undefined,
       };
@@ -498,10 +628,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Order create failed");
 
-      setMsg("✅ Order Submitted");
-      setTimeout(() => setMsg(null), 2000);
-
-      setLines([{ collection: "All", sku: "", productName: "", variantId: "", sizeLabel: "", unit: "SHEET", qty: 1, unitPrice: 0 }]);
+      setLines([lineTemplate()]);
       setBuyerPoRef("");
       setNotes("");
       setFreight(0);
@@ -515,12 +642,14 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
       setOrderType("Regular");
       setRepeatOrderId("");
       setShippingSameAsBilling(false);
+      setIncoterm("EXW");
 
       await loadNextPo();
       await loadPreviousOrders();
+
+      showPopup("success", "Order Submitted Successfully", "Your order has been submitted successfully.");
     } catch (e: any) {
-      setMsg(`❌ ${e?.message || "Error"}`);
-      setTimeout(() => setMsg(null), 2200);
+      showPopup("error", "Submission Failed", e?.message || "Error");
     } finally {
       setSaving(false);
     }
@@ -529,6 +658,8 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   // ---------------- UI ----------------
   return (
     <div className="bg-[#fcfcfc] min-h-screen pb-20 font-sans text-zinc-900">
+      <PremiumPopup popup={popup} onClose={closePopup} />
+
       <div className="bg-white border-b border-zinc-100 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -563,12 +694,6 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
       </div>
 
       <div className="max-w-7xl mx-auto px-6 mt-8 space-y-6">
-        {msg ? (
-          <div className="bg-white border border-zinc-100 rounded-xl px-4 py-3 text-xs font-semibold text-zinc-700 shadow-sm">
-            {msg}
-          </div>
-        ) : null}
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Section title="Order Identity" icon={<Calendar size={14} />}>
             <div className="grid grid-cols-2 gap-3">
@@ -617,8 +742,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                   >
                     <option value="">Select previous order</option>
                     {previousOrders.map((o) => {
-                      const meta = safeJson(o?.notes);
-                      const label = meta?.poNumber ? `PO ${meta.poNumber}` : `Order ${String(o.id).slice(-6)}`;
+                      const label = getRepeatOrderLabel(o);
                       return (
                         <option key={o.id} value={o.id}>
                           {label}
@@ -711,7 +835,13 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
               </div>
 
               <Field label="Destination Port" value={destinationPort} onChange={setDestinationPort} />
-              <Field label="Requested Dispatch Date" value={requestedDispatchDate} onChange={setRequestedDispatchDate} placeholder="YYYY-MM-DD" />
+              <Field
+                label="Requested Dispatch Date"
+                value={requestedDispatchDate}
+                onChange={setRequestedDispatchDate}
+                placeholder="YYYY-MM-DD"
+                type="date"
+              />
             </div>
           </Section>
 
@@ -737,7 +867,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
             {lines.map((l, i) => {
               const skuList = skusForCollection(l.collection);
-              const variants = l.sku ? variantsForSku(l.collection, l.sku) : [];
+              const variants = l.sku ? variantsForSku(l.collection, l.sku, l.unit) : [];
 
               return (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
@@ -745,7 +875,14 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                     value={l.collection}
                     onChange={(e) => {
                       const v = e.target.value;
-                      setLine(i, { collection: v, sku: "", variantId: "", sizeLabel: "", productName: "", unitPrice: 0 });
+                      setLine(i, {
+                        collection: v,
+                        sku: "",
+                        variantId: "",
+                        sizeLabel: "",
+                        productName: "",
+                        unitPrice: 0,
+                      });
                     }}
                     className="col-span-2 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
                   >
@@ -794,10 +931,10 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                         unitPrice: nextPrice,
                       });
                     }}
-                    className="col-span-3 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
+                    className="col-span-3 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black disabled:opacity-50"
                     disabled={!l.sku}
                   >
-                    <option value="">Select Size</option>
+                    <option value="">{l.sku ? "Select Size" : "Select SKU First"}</option>
                     {variants.map((r) => (
                       <option key={r.variant.id} value={r.variant.id}>
                         {r.variant.sizeLabel}
@@ -809,7 +946,29 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                     value={l.unit}
                     onChange={(e) => {
                       const unit = e.target.value as Unit;
-                      const nextPrice = l.variantId ? unitPriceForVariant(l.variantId, unit) : 0;
+
+                      if (!l.variantId) {
+                        setLine(i, { unit, unitPrice: 0 });
+                        return;
+                      }
+
+                      const row = rowByVariantId.get(l.variantId);
+                      if (!hasPriceForUnit(row, unit)) {
+                        setLine(i, {
+                          unit,
+                          variantId: "",
+                          sizeLabel: "",
+                          unitPrice: 0,
+                        });
+                        showPopup(
+                          "error",
+                          "Size Reset",
+                          "Selected size is not priced for this unit. Please select a size with updated pricing."
+                        );
+                        return;
+                      }
+
+                      const nextPrice = unitPriceForVariant(l.variantId, unit);
                       setLine(i, { unit, unitPrice: nextPrice });
                     }}
                     className="col-span-1 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
@@ -841,7 +1000,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                     <button
                       type="button"
                       onClick={() => removeLine(i)}
-                      className="h-9 w-9 rounded bg-white border border-zinc-100 hover:border-zinc-300 flex items-center justify-center"
+                      className="h-9 w-9 rounded bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 hover:border-rose-200 transition-all flex items-center justify-center"
                       title="Remove"
                     >
                       <Trash2 size={14} />
@@ -855,7 +1014,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
               <button
                 type="button"
                 onClick={addLine}
-                className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-black"
+                className="inline-flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 hover:border-emerald-200 transition-all"
               >
                 <Plus size={14} /> Add Line
               </button>
@@ -932,9 +1091,15 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
               />
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Signer Name" value={signerName} onChange={setSignerName} placeholder="Optional" />
+                <Field
+                  label="Signer Name *"
+                  value={signerName}
+                  onChange={setSignerName}
+                  placeholder="Required"
+                />
+
                 <div>
-                  <Label>Signature Upload</Label>
+                  <Label required>Signature Upload</Label>
                   <input
                     type="file"
                     accept="image/*"
@@ -943,13 +1108,14 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                       setSignatureFile(f);
                       if (!f) {
                         setSignatureDataUrl("");
+                        setSignatureInfo("");
                         return;
                       }
                       const dataUrl = await fileToDataUrl(f);
                       setSignatureDataUrl(dataUrl);
                       setSignatureInfo(f.name || "");
                     }}
-                    className="w-full text-xs"
+                    className="w-full h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 py-2 outline-none focus:border-black transition-all file:mr-3 file:border-0 file:bg-transparent file:text-xs file:font-medium"
                   />
                 </div>
 
@@ -1015,15 +1181,21 @@ function Section({ title, icon, children }: any) {
   );
 }
 
-function Label({ children }: any) {
-  return <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">{children}</div>;
+function Label({ children, required = false }: any) {
+  return (
+    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">
+      {children}
+      {required ? <span className="text-rose-500"> *</span> : null}
+    </div>
+  );
 }
 
-function Field({ label, value, onChange, placeholder }: any) {
+function Field({ label, value, onChange, placeholder, type = "text" }: any) {
   return (
     <div>
       <Label>{label}</Label>
       <input
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -1053,6 +1225,70 @@ function ReadOnly({ label, value }: any) {
       <Label>{label}</Label>
       <div className="w-full h-9 text-xs bg-white border border-zinc-100 rounded px-3 flex items-center text-zinc-700">
         {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function PremiumPopup({
+  popup,
+  onClose,
+}: {
+  popup: PopupState;
+  onClose: () => void;
+}) {
+  if (!popup.open) return null;
+
+  const isSuccess = popup.type === "success";
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+      <div className="w-full max-w-md rounded-[24px] border border-zinc-200 bg-white shadow-2xl overflow-hidden">
+        <div className={`px-6 py-5 ${isSuccess ? "bg-emerald-50" : "bg-rose-50"} border-b border-zinc-100`}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                  isSuccess ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                }`}
+              >
+                {isSuccess ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+              </div>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-400">
+                  {isSuccess ? "Success" : "Action Required"}
+                </div>
+                <h3 className="text-sm font-bold text-zinc-900 mt-1">{popup.title}</h3>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-8 w-8 rounded-full bg-white border border-zinc-200 text-zinc-500 hover:text-black transition-all flex items-center justify-center"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          <p className="text-[13px] leading-6 text-zinc-600">{popup.message}</p>
+
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`px-5 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
+                isSuccess
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-black text-white hover:bg-zinc-800"
+              }`}
+            >
+              OK
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

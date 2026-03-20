@@ -7,6 +7,7 @@ import { getServerSession } from "@/lib/serverSession";
  * ✅ POST: create order
  *   - FIX FK: Order.distributorId = Distributor.id (resolved by Distributor.userId = session.userId)
  *   - Stores meta in order.notes JSON (includes orderType, otherCharge, signature dataUrl, signerName)
+ *   - FIXED: removed interactive transaction timeout issue
  * ✅ GET: list orders for logged-in distributor (for Repeat dropdown)
  *   - Returns { ok:true, items:[...] } so your existing Place Order UI works
  */
@@ -52,7 +53,7 @@ type PlaceOrderBody = {
   poDate?: string;
   buyerPoRef?: string;
 
-  orderType?: string; // Regular/Repeat etc
+  orderType?: string;
   currency?: string;
   incoterm?: string;
 
@@ -73,19 +74,17 @@ type PlaceOrderBody = {
   freight?: number;
   insurance?: number;
   discount?: number;
-  otherCharge?: number; // ✅ NEW (Other)
+  otherCharge?: number;
 
   itemsTotal?: number;
   grandTotal?: number;
 
-  // ✅ signature saved in notes so admin can show
   signature?: {
     signerName?: string;
-    dataUrl?: string; // "data:image/png;base64,..."
+    dataUrl?: string;
   };
   signatureInfo?: string;
 
-  // optional (UI sends)
   itemsMeta?: any[];
   repeatOrderId?: string | null;
 };
@@ -139,7 +138,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Totals
     const fallbackItemsTotal = cleanItems.reduce((s, it) => s + it.qty * it.unitPrice, 0);
 
     const itemsTotal = num(body.itemsTotal, fallbackItemsTotal);
@@ -154,7 +152,7 @@ export async function POST(req: Request) {
     );
 
     const currency = (body.currency || "USD").toUpperCase();
-    const incoterm = (body.incoterm || "FOB").toUpperCase();
+    const incoterm = (body.incoterm || "EXW").toUpperCase();
 
     const meta = {
       poNumber: body.poNumber || null,
@@ -188,12 +186,10 @@ export async function POST(req: Request) {
       itemsTotal,
       grandTotal,
 
-      // ✅ Signature stored for admin
       signatureInfo: body.signatureInfo || null,
       signerName: body.signature?.signerName || null,
       signatureDataUrl: body.signature?.dataUrl || null,
 
-      // ✅ items meta (use UI provided OR generate)
       itemsMeta:
         Array.isArray(body.itemsMeta) && body.itemsMeta.length
           ? body.itemsMeta
@@ -209,31 +205,32 @@ export async function POST(req: Request) {
       createdVia: "DISTRIBUTOR_PORTAL",
     };
 
-    // Create order + items in transaction
-    const order = await prisma.$transaction(async (tx) => {
-      const o = await tx.order.create({
-        data: {
-          distributorId, // ✅ FIXED FK
-          status: "RECEIVED",
-          eta: null,
-          notes: JSON.stringify(meta),
-        },
-      });
+    const order = await prisma.order.create({
+      data: {
+        distributorId,
+        status: "RECEIVED",
+        eta: null,
+        notes: JSON.stringify(meta),
+      },
+    });
 
-      await tx.orderItem.createMany({
+    try {
+      await prisma.orderItem.createMany({
         data: cleanItems.map((it) => ({
-          orderId: o.id,
+          orderId: order.id,
           productId: it.productId,
           variantId: it.variantId,
           qty: it.qty,
           unitPrice: it.unitPrice,
         })),
       });
+    } catch (itemError) {
+      await prisma.order.delete({
+        where: { id: order.id },
+      });
+      throw itemError;
+    }
 
-      return o;
-    });
-
-    // ✅ return both styles so UI never breaks
     return NextResponse.json({ ok: true, id: order.id, order, meta });
   } catch (e: any) {
     console.error("ORDER CREATE ERROR:", e);
