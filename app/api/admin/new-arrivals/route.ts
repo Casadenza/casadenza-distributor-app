@@ -21,16 +21,16 @@ function parseGalleryPayload(raw: unknown, fallback?: string | null): GalleryPay
 
       if (Array.isArray(parsed)) {
         images = parsed
-          .filter((value): value is string => typeof value === "string")
-          .map((value) => value.trim())
+          .filter((value: unknown): value is string => typeof value === "string")
+          .map((value: string) => value.trim())
           .filter(Boolean);
       } else if (parsed && typeof parsed === "object") {
         const record = parsed as Record<string, unknown>;
 
         if (Array.isArray(record.images)) {
           images = record.images
-            .filter((value): value is string => typeof value === "string")
-            .map((value) => value.trim())
+            .filter((value: unknown): value is string => typeof value === "string")
+            .map((value: string) => value.trim())
             .filter(Boolean);
         }
 
@@ -132,7 +132,7 @@ export async function PATCH(req: Request) {
       new Set(
         rawImages
           .filter((value: unknown): value is string => typeof value === "string")
-          .map((value) => value.trim())
+          .map((value: string) => value.trim())
           .filter(Boolean)
       )
     );
