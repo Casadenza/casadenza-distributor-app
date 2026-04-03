@@ -64,6 +64,11 @@ model Product {
   thicknessMm Float?
   isActive    Boolean @default(true)
 
+  // NEW ARRIVALS
+  galleryJson         String?
+  isNewArrival        Boolean @default(false)
+  newArrivalPriority  Int     @default(0)
+
   variants   ProductVariant[]
   orderItems OrderItem[] // opposite relation for OrderItem.product
 
@@ -157,7 +162,6 @@ model Order {
   documents OrderDocument[]
 
   createdAt DateTime @default(now())
-  // ✅ IMPORTANT: default(now()) so existing rows can migrate
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([distributorId])
@@ -168,7 +172,6 @@ model OrderItem {
   id String @id @default(cuid())
 
   orderId   String
-  // ✅ IMPORTANT: nullable so existing 34 rows can migrate
   productId String?
   variantId String?
 
@@ -177,13 +180,11 @@ model OrderItem {
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  // ✅ optional relation because productId is nullable
   product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
-  // ✅ IMPORTANT: default(now()) so existing rows can migrate
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([orderId])
@@ -201,37 +202,29 @@ model OrderDocument {
   url   String?
 
   createdAt DateTime @default(now())
-  // ✅ IMPORTANT: default(now()) so existing rows can migrate
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([orderId])
 }
 
-// -------------------- PACKING CALCULATOR (NEW) --------------------
-// SQLite-safe (NO enums, NO Json)
-
-// Per-variant packing rule (ROLL / CRATE / PALLET)
+// -------------------- PACKING CALCULATOR --------------------
 model PackingRule {
   id String @id @default(cuid())
 
   variantId String
   variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
-  // "ROLL" | "CRATE" | "PALLET"
   packingType String
 
   sheetsPerUnit    Int
   weightPerSheetKg Float
 
-  // Unit dimensions (cm)
   unitLengthCm Float
   unitWidthCm  Float
   unitHeightCm Float
 
-  // Empty unit weight (tare)
   unitTareKg Float
 
-  // Palletization (optional)
   palletUnitsPerPallet Int?
   palletLengthCm       Float?
   palletWidthCm        Float?
@@ -248,17 +241,14 @@ model PackingRule {
   @@index([variantId])
 }
 
-// Container types (GP20 / GP40 / HC40 / LCL)
 model ContainerType {
   id String @id @default(cuid())
 
-  // "GP20" | "GP40" | "HC40" | "LCL"
   mode String
 
   volumeCbm   Float
   maxWeightKg Float
 
-  // Internal dimensions (cm)
   internalLengthCm Float
   internalWidthCm  Float
   internalHeightCm Float
@@ -287,8 +277,8 @@ model SheetWeightMaster {
 
 model PackingRuleMaster {
   id              String   @id @default(cuid())
-  packingType     String   // "ROLL" | "PALLET" | "CRATE"
-  sizeLabel       String   // e.g., "610x1220 mm"
+  packingType     String
+  sizeLabel       String
   qtyMin          Int
   qtyMax          Int
   dimLIn          Float
@@ -308,18 +298,13 @@ model MarketingAsset {
   id           String   @id @default(cuid())
   title        String
 
-  // "DOCUMENT" | "IMAGE" | "VIDEO"
   type         String
-
-  // e.g. "PRODUCT_CATALOGUE_FULL", "PROJECT_HOTEL", "VIDEO_REELS_SHORT"
   category     String
 
   collection   String?
   stoneType    String?
   description  String?
 
-  // If uploaded -> filePath filled + fileUrl = /api/marketing/[id]/download
-  // If link-based video -> externalUrl filled
   fileUrl      String?
   externalUrl  String?
   filePath     String?

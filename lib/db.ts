@@ -1,14 +1,43 @@
 import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+declare global {
+  var prisma: PrismaClient | undefined;
+}
 
-export const db =
-  globalForPrisma.prisma ??
+// 🔥 Better config (connection stability + logging control)
+const prismaClient =
+  global.prisma ||
   new PrismaClient({
-    log: ["error", "warn"],
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["query", "error", "warn"]
+        : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+// 🔥 Prevent multiple instances in dev (hot reload fix)
+if (process.env.NODE_ENV !== "production") {
+  global.prisma = prismaClient;
+}
 
-// optional alias (agar kahin prisma import ho raha ho)
-export const prisma = db;
+// 🔥 Optional: auto reconnect safeguard (lightweight)
+prismaClient.$use(async (params, next) => {
+  try {
+    return await next(params);
+  } catch (error: any) {
+    // retry once if connection closed
+    if (
+      error?.message?.includes("Closed") ||
+      error?.message?.includes("connection")
+    ) {
+      try {
+        return await next(params);
+      } catch (err) {
+        throw err;
+      }
+    }
+    throw error;
+  }
+});
+
+export const db = prismaClient;
+export const prisma = prismaClient;

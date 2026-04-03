@@ -1,0 +1,4 @@
+{
+  "dashboardAlertEnabled": true,
+  "popupAlertEnabled": true
+}

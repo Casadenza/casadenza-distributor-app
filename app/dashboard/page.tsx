@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/serverSession";
 import { prisma } from "@/lib/db";
 import DashboardAutoRefresh from "./dashboard-auto-refresh";
+import NewArrivalsAlert from "./new-arrivals-alert";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -12,6 +13,7 @@ import {
   Files,
   ArrowRight,
   Calculator,
+  Sparkles,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -141,13 +143,67 @@ function getTimeLabel(createdAt: any, index: number) {
   return `${Math.max(diffDay, 1)}d`;
 }
 
+type GalleryPayload = {
+  images: string[];
+  launchDate: string | null;
+  description: string | null;
+};
+
+function parseGalleryPayload(raw: unknown, fallback?: string | null): GalleryPayload {
+  let images: string[] = [];
+  let launchDate: string | null = null;
+  let description: string | null = null;
+
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed)) {
+        images = parsed
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean);
+      } else if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+
+        if (Array.isArray(record.images)) {
+          images = record.images
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => value.trim())
+            .filter(Boolean);
+        }
+
+        if (typeof record.launchDate === "string" && record.launchDate.trim()) {
+          launchDate = record.launchDate.trim();
+        }
+
+        if (typeof record.description === "string" && record.description.trim()) {
+          description = record.description.trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (fallback && fallback.trim()) {
+    images.unshift(fallback.trim());
+  }
+
+  return {
+    images: Array.from(new Set(images)),
+    launchDate,
+    description,
+  };
+}
+
 export default async function SlimPremiumDashboard() {
   const session = await getServerSession();
   if (!session) redirect("/login");
 
   const distributorId = session.distributorId || "";
 
-  const [dist, ordersCount, taskCount, serviceCount, recentOrders] = await Promise.all([
+  const [dist, ordersCount, taskCount, serviceCount, recentOrders, newArrivalProducts] = await Promise.all([
     distributorId
       ? prisma.distributor.findUnique({
           where: { id: distributorId },
@@ -172,11 +228,38 @@ export default async function SlimPremiumDashboard() {
           take: 3,
         })
       : Promise.resolve([]),
+    prisma.product.findMany({
+      where: {
+        isActive: true,
+        isNewArrival: true,
+      },
+      orderBy: [{ newArrivalPriority: "desc" }, { updatedAt: "desc" }],
+      take: 3,
+      select: {
+        id: true,
+        name: true,
+        collection: true,
+        image: true,
+        galleryJson: true,
+      },
+    }),
   ]);
 
   const tier = (dist?.tier ?? "STANDARD").toUpperCase();
   const dateStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
   const documentCount = recentOrders.reduce((sum, order: any) => sum + (order?.documents?.length || 0), 0);
+
+  const newArrivalItems = newArrivalProducts.map((item) => {
+    const payload = parseGalleryPayload(item.galleryJson, item.image);
+    return {
+      id: item.id,
+      name: item.name,
+      collection: item.collection ?? "",
+      launchDate: payload.launchDate,
+    };
+  });
+
+  const newArrivalCount = newArrivalItems.length;
 
   const streamItems = recentOrders.length
     ? recentOrders.map((order: any, index: number) => ({
@@ -230,6 +313,8 @@ export default async function SlimPremiumDashboard() {
           </div>
         </div>
       </div>
+
+      <NewArrivalsAlert count={newArrivalCount} items={newArrivalItems} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <SlimMetric label="Orders" value={String(ordersCount).padStart(2, "0")} sub="Total" />
@@ -343,6 +428,34 @@ export default async function SlimPremiumDashboard() {
             </Link>
           </div>
 
+          <div className="rounded-[24px] border border-[#E7D3A8] bg-[#FFF9F0] p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#C5A267] text-white">
+                <Sparkles size={16} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[8px] font-bold uppercase tracking-[0.26em] text-[#C5A267]">
+                  New Arrivals
+                </p>
+                <h3 className="mt-1 text-[15px] font-semibold tracking-tight text-[#1A1A1A]">
+                  {newArrivalCount > 0
+                    ? `${newArrivalCount} fresh launch${newArrivalCount > 1 ? "es" : ""}`
+                    : "No fresh launch right now"}
+                </h3>
+                <p className="mt-1 text-[11px] leading-5 text-[#7D7568]">
+                  Latest collection updates with launch dates and description are available in your catalogue.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/dashboard/new-arrivals"
+              className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-full bg-[#1A1A1A] text-[8px] font-bold uppercase tracking-[0.2em] text-white transition hover:bg-[#2A2A2A]"
+            >
+              Explore New Arrivals
+            </Link>
+          </div>
+
           <div className="flex gap-2">
             <Link
               href="/dashboard/training"
@@ -352,9 +465,14 @@ export default async function SlimPremiumDashboard() {
             </Link>
             <Link
               href="/dashboard/new-arrivals"
-              className="flex-1 py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all"
+              className="relative flex-1 py-2.5 border border-[#EAE7E2] rounded-xl bg-[#FAF9F6] text-[8px] font-bold uppercase tracking-widest text-[#B5B0A4] text-center hover:text-[#1A1A1A] hover:border-[#C5A267] transition-all"
             >
               New Arrivals
+              {newArrivalCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-[#C5A267] px-1.5 py-0.5 text-[8px] font-bold text-white">
+                  {newArrivalCount}
+                </span>
+              ) : null}
             </Link>
           </div>
 
