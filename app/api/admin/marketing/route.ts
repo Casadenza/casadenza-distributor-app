@@ -41,7 +41,11 @@ const ALLOWED_CATEGORIES = new Set([
   "VIDEO_REELS_SHORT",
 ]);
 
-const MAX_FILE_MB = 25;
+const MAX_FILE_SIZE_MB: Record<string, number> = {
+  DOCUMENT: 10,
+  IMAGE: 10,
+  VIDEO: 100,
+};
 
 function extFromMime(mime: string) {
   if (mime === "application/pdf") return "pdf";
@@ -134,9 +138,12 @@ export async function POST(req: Request) {
   if (!ALLOWED_CATEGORIES.has(category)) return jsonError("Invalid category", 400);
   if (!file) return jsonError("Missing file", 400);
 
+  const maxAllowedMB = MAX_FILE_SIZE_MB[type];
+  if (!maxAllowedMB) return jsonError("Invalid file type configuration", 400);
+
   const sizeMB = file.size / 1024 / 1024;
-  if (sizeMB > MAX_FILE_MB) {
-    return jsonError(`File too large. Max allowed ${MAX_FILE_MB}MB`, 400);
+  if (sizeMB > maxAllowedMB) {
+    return jsonError(`File too large for ${type}. Max allowed ${maxAllowedMB}MB`, 400);
   }
 
   const mime = file.type;
