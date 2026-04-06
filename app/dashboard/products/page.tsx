@@ -5,10 +5,17 @@ export const dynamic = "force-dynamic";
 
 export default async function DistributorProductsPage() {
   const products = await prisma.product.findMany({
-    where: { isActive: true }, // Sirf active products
-    orderBy: { name: "asc" },
+    where: { isActive: true },
+    orderBy: [{ collection: "asc" }, { sku: "asc" }],
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      image: true,
+      collection: true,
+      stoneType: true,
+    },
   });
 
-  // Ensure 'products' is always an array before passing to client
   return <DistributorProductsClient products={products || []} />;
 }
