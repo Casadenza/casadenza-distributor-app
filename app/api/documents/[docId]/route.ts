@@ -67,7 +67,7 @@ export async function GET(_req: Request, ctx: { params: { docId: string } }) {
     return new NextResponse(upstream.body, {
       headers: {
         "Content-Type": upstream.headers.get("content-type") || "application/pdf",
-        "Content-Disposition": `attachment; filename="${safeName}"`,
+        "Content-Disposition": `inline; filename="${safeName}"`,
         "Cache-Control": "private, no-store, max-age=0",
       },
     });
@@ -86,7 +86,7 @@ export async function GET(_req: Request, ctx: { params: { docId: string } }) {
   return new NextResponse(stream as any, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${safeName}"`,
+      "Content-Disposition": `inline; filename="${safeName}"`,
       "Cache-Control": "private, no-store, max-age=0",
     },
   });
