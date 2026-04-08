@@ -16,23 +16,39 @@ function safeParseNotes(notes: any) {
 function money(n: any) {
   const v = Number(n ?? 0);
   return Number.isFinite(v)
-    ? v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    ? v.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
     : "0.00";
 }
 
 function calcItemsTotalFallback(order: any) {
   if (order?.items?.length) {
     return order.items.reduce(
-      (sum: number, it: any) => sum + Number(it?.qty || 0) * Number(it?.unitPrice || 0),
+      (sum: number, it: any) =>
+        sum + Number(it?.qty || 0) * Number(it?.unitPrice || 0),
       0
     );
   }
   return 0;
 }
 
-function calcGrandTotalFallback(order: any, freight: any, insurance: any, discount: any, otherCharge: any) {
+function calcGrandTotalFallback(
+  order: any,
+  freight: any,
+  insurance: any,
+  discount: any,
+  otherCharge: any
+) {
   const itemsTotal = calcItemsTotalFallback(order);
-  return itemsTotal + Number(freight || 0) + Number(insurance || 0) + Number(otherCharge || 0) - Number(discount || 0);
+  return (
+    itemsTotal +
+    Number(freight || 0) +
+    Number(insurance || 0) +
+    Number(otherCharge || 0) -
+    Number(discount || 0)
+  );
 }
 
 function findSignatureDoc(order: any) {
@@ -42,7 +58,16 @@ function findSignatureDoc(order: any) {
     const t = String(s || "").toLowerCase();
     return kw.some((k) => t.includes(k));
   };
-  return docs.find((d) => has(d?.title) || has(d?.name) || has(d?.fileName) || has(d?.url) || has(d?.type)) || null;
+  return (
+    docs.find(
+      (d) =>
+        has(d?.title) ||
+        has(d?.name) ||
+        has(d?.fileName) ||
+        has(d?.url) ||
+        has(d?.type)
+    ) || null
+  );
 }
 
 function getSignatureFromNotes(meta: any) {
@@ -97,17 +122,15 @@ export default function PrintClient({ order }: { order: any }) {
   const grandTotal = meta?.grandTotal ?? null;
 
   const derivedItemsTotal = itemsTotal ?? calcItemsTotalFallback(order);
-  const derivedGrandTotal = grandTotal ?? calcGrandTotalFallback(order, freight, insurance, discount, otherCharge);
+  const derivedGrandTotal =
+    grandTotal ??
+    calcGrandTotalFallback(order, freight, insurance, discount, otherCharge);
 
   const { signerName, signatureDataUrl } = getSignatureFromNotes(meta);
   const sigDoc = findSignatureDoc(order);
   const signatureSrc = (sigDoc?.url || "") || signatureDataUrl || "";
 
-  // strict 1-page fit
-  const MAX_ITEMS = 12;
   const allItems = Array.isArray(order?.items) ? order.items : [];
-  const visibleItems = allItems.slice(0, MAX_ITEMS);
-  const hiddenCount = Math.max(0, allItems.length - visibleItems.length);
 
   useEffect(() => {
     const t = setTimeout(() => window.print(), 350);
@@ -115,203 +138,423 @@ export default function PrintClient({ order }: { order: any }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-100 flex justify-center print:bg-white">
+    <div className="print-root flex min-h-screen justify-center bg-zinc-100 print:bg-white">
       <style>{`
-        @page { size: A4; margin: 0; }
-        html, body { height: 100%; }
+        @page {
+          size: A4;
+          margin: 5mm 5mm 8mm 5mm;
+        }
+
+        html, body {
+          height: 100%;
+        }
+
         @media print {
           header, nav, aside, footer, .no-print,
           [role="navigation"], [role="complementary"],
-          .sidebar, .topbar, .app-header {
+          .sidebar, .topbar, .app-header,
+          nextjs-portal,
+          #__next-build-watcher,
+          #__next-route-announcer__,
+          #nextjs__container,
+          #nextjs-toast,
+          [data-next-badge-root],
+          [data-nextjs-toast],
+          [data-nextjs-dialog-overlay],
+          [data-nextjs-dialog],
+          [data-next-mark],
+          iframe[src*="__nextjs"],
+          button[aria-label*="Next.js"],
+          button[aria-label="Open Next.js Dev Tools"],
+          body > div[style*="position: fixed"],
+          body > button,
+          body > iframe,
+          *[style*="position: fixed"][style*="bottom"] {
             display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
           }
-          body { background: #fff !important; margin: 0 !important; }
-          .sheet { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+
+          html, body {
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .print-shell {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .document-sheet {
+            width: 100% !important;
+            max-width: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .items-table {
+            page-break-inside: auto;
+            break-inside: auto;
+          }
+
+          .items-table thead {
+            display: table-header-group;
+          }
+
+          .items-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          .avoid-break {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          .print-page-counter {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: #9CA3AF;
+          }
+
+          .print-page-counter::after {
+            content: counter(page) " / " counter(pages);
+          }
         }
-        .sheet{
-          width: 210mm;
-          height: 297mm;
-          background:#fff;
-          overflow:hidden;
-          border:1px solid #f1f1f1;
+
+        .document-sheet {
+          width: 200mm;
+          background: #fff;
+          border: 1px solid #f1f1f1;
+          border-radius: 8px;
           box-shadow: 0 10px 24px rgba(0,0,0,0.08);
-          border-radius: 12px;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "SF Pro Display", Arial;
+          margin: 10px 0;
         }
-        .pad{ padding: 10mm 10mm; }
-        .tiny{ font-size: 8px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color:#9CA3AF; }
-        .sub{ font-size: 9.5px; font-weight: 600; color:#9CA3AF; }
-        .h1{ font-size: 24px; font-weight: 900; letter-spacing:-0.02em; line-height:1; color:#0f172a; }
-        .body{ font-size: 10px; font-weight: 500; color:#0f172a; }
-        .divider{ border-bottom:1px solid #0f172a; }
-        .rowhead { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .16em; color:#9CA3AF; }
+
+        .pad {
+          padding: 5mm 5mm 8mm 5mm;
+        }
+
+        .tiny {
+          font-size: 8px;
+          font-weight: 800;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+          color: #9CA3AF;
+        }
+
+        .sub {
+          font-size: 9px;
+          font-weight: 600;
+          color: #9CA3AF;
+        }
+
+        .h1 {
+          font-size: 22px;
+          font-weight: 900;
+          letter-spacing: -0.02em;
+          line-height: 1;
+          color: #0f172a;
+        }
+
+        .body {
+          font-size: 10px;
+          font-weight: 500;
+          color: #0f172a;
+        }
+
+        .divider {
+          border-bottom: 1px solid #0f172a;
+        }
+
+        .rowhead {
+          font-size: 8px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .16em;
+          color: #9CA3AF;
+        }
+
+        .items-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .items-table thead th {
+          background: #fafafa;
+        }
+
+        .items-table th,
+        .items-table td {
+          vertical-align: top;
+        }
       `}</style>
 
-      <div className="no-print fixed top-4 right-4 flex gap-2">
+      <div className="no-print fixed right-4 top-4 z-[9999] flex gap-2">
         <button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 bg-black text-white px-3 py-2 rounded-lg text-[11px] font-semibold shadow"
+          className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-2 text-[11px] font-semibold text-white shadow"
         >
           <Printer size={14} />
           Print
         </button>
         <button
           onClick={() => window.close()}
-          className="bg-white px-3 py-2 rounded-lg text-[11px] font-semibold border"
+          className="rounded-lg border bg-white px-3 py-2 text-[11px] font-semibold"
         >
           Close
         </button>
       </div>
 
-      <div className="sheet">
-        <div className="pad">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="text-[11px] font-black">
-                CASADENZA <span className="text-zinc-400 font-semibold">DISTRIBUTION</span>
-              </div>
-              <div className="h1 mt-1">PURCHASE ORDER</div>
-              <div className="sub">DISTRIBUTOR COPY</div>
-            </div>
-
-            <div className="text-right">
-              <div className="tiny text-zinc-500">GRAND TOTAL</div>
-              <div className="text-[22px] font-black text-zinc-400 leading-none">
-                {currency} {money(derivedGrandTotal)}
+      <div className="print-shell">
+        <div className="document-sheet">
+          <div className="pad">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[11px] font-black">
+                  CASADENZA{" "}
+                  <span className="font-semibold text-zinc-400">DISTRIBUTION</span>
+                </div>
+                <div className="h1 mt-1">PURCHASE ORDER</div>
+                <div className="sub">DISTRIBUTOR COPY</div>
               </div>
 
-              <div className="mt-3 space-y-1">
-                <div className="tiny text-zinc-500">
-                  PO REF:{" "}
-                  <span className="text-zinc-900 font-extrabold tracking-normal">
-                    {poNumber || String(order?.id || "").slice(-8)}
-                  </span>
+              <div className="text-right">
+                <div className="mt-2 tiny text-zinc-500">Grand Total</div>
+                <div className="text-[22px] font-black leading-none text-zinc-400">
+                  {currency} {money(derivedGrandTotal)}
                 </div>
-                <div className="tiny text-zinc-500">
-                  DATE:{" "}
-                  <span className="text-zinc-900 font-extrabold tracking-normal">{poDate || "—"}</span>
-                </div>
-                {buyerPoRef ? (
+
+                <div className="mt-3 space-y-1">
                   <div className="tiny text-zinc-500">
-                    BUYER PO:{" "}
-                    <span className="text-zinc-900 font-extrabold tracking-normal">{buyerPoRef}</span>
+                    PO REF:{" "}
+                    <span className="tracking-normal text-zinc-900 font-extrabold">
+                      {poNumber || String(order?.id || "").slice(-8)}
+                    </span>
                   </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 divider" />
-
-          <div className="grid grid-cols-3 gap-4 mt-3">
-            <div>
-              <div className="rowhead">Order</div>
-              <div className="mt-1 space-y-1 body">
-                <div>Type: <span className="font-semibold">{orderType || "—"}</span></div>
-                <div>Incoterm: <span className="font-semibold">{incoterm || "—"}</span></div>
-                <div>Delivery: <span className="font-semibold">{deliveryMethod || "—"}</span></div>
-                <div>Port: <span className="font-semibold">{destinationPort || "—"}</span></div>
-                <div>Dispatch: <span className="font-semibold">{requestedDispatchDate || "—"}</span></div>
-                <div>Container: <span className="font-semibold">{containerType || "—"}</span></div>
-                <div>Packing: <span className="font-semibold">{packingType || "—"}</span></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="rowhead">Ship To</div>
-              <div className="mt-1 space-y-1 body">
-                <div className="font-semibold">{ship?.companyName || "—"}</div>
-                <div>{ship?.contactName || ""}</div>
-                <div>{ship?.phone || ""}</div>
-                <div>{ship?.email || ""}</div>
-                <div>
-                  {[ship?.address1, ship?.address2, ship?.city, ship?.state, ship?.postal, ship?.country]
-                    .filter(Boolean)
-                    .join(", ")}
+                  <div className="tiny text-zinc-500">
+                    DATE:{" "}
+                    <span className="tracking-normal text-zinc-900 font-extrabold">
+                      {poDate || "—"}
+                    </span>
+                  </div>
+                  {buyerPoRef ? (
+                    <div className="tiny text-zinc-500">
+                      BUYER PO:{" "}
+                      <span className="tracking-normal text-zinc-900 font-extrabold">
+                        {buyerPoRef}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
 
-            <div>
-              <div className="rowhead">Billing / Notify</div>
-              <div className="mt-1 space-y-1 body">
-                <div className="font-semibold">{billing?.billingName || "—"}</div>
-                <div>
-                  {[billing?.billingLine1, billing?.billingLine2, billing?.billingCity, billing?.billingState, billing?.billingZip, billing?.billingCountry]
-                    .filter(Boolean)
-                    .join(", ")}
+            <div className="mt-3 divider" />
+
+            <div className="avoid-break mt-3 grid grid-cols-3 gap-4">
+              <div>
+                <div className="rowhead">Order</div>
+                <div className="mt-1 space-y-1 body">
+                  <div>
+                    Type: <span className="font-semibold">{orderType || "—"}</span>
+                  </div>
+                  <div>
+                    Incoterm: <span className="font-semibold">{incoterm || "—"}</span>
+                  </div>
+                  <div>
+                    Delivery:{" "}
+                    <span className="font-semibold">{deliveryMethod || "—"}</span>
+                  </div>
+                  <div>
+                    Port:{" "}
+                    <span className="font-semibold">{destinationPort || "—"}</span>
+                  </div>
+                  <div>
+                    Dispatch:{" "}
+                    <span className="font-semibold">
+                      {requestedDispatchDate || "—"}
+                    </span>
+                  </div>
+                  <div>
+                    Container:{" "}
+                    <span className="font-semibold">{containerType || "—"}</span>
+                  </div>
+                  <div>
+                    Packing:{" "}
+                    <span className="font-semibold">{packingType || "—"}</span>
+                  </div>
                 </div>
-                <div className="mt-2">Notify: <span className="font-semibold">{notify?.name || "—"}</span></div>
-                <div>{notify?.contact || ""}</div>
+              </div>
+
+              <div>
+                <div className="rowhead">Ship To</div>
+                <div className="mt-1 space-y-1 body">
+                  <div className="font-semibold">{ship?.companyName || "—"}</div>
+                  <div>{ship?.contactName || ""}</div>
+                  <div>{ship?.phone || ""}</div>
+                  <div>{ship?.email || ""}</div>
+                  <div>
+                    {[
+                      ship?.address1,
+                      ship?.address2,
+                      ship?.city,
+                      ship?.state,
+                      ship?.postal,
+                      ship?.country,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="rowhead">Billing / Notify</div>
+                <div className="mt-1 space-y-1 body">
+                  <div className="font-semibold">{billing?.billingName || "—"}</div>
+                  <div>
+                    {[
+                      billing?.billingLine1,
+                      billing?.billingLine2,
+                      billing?.billingCity,
+                      billing?.billingState,
+                      billing?.billingZip,
+                      billing?.billingCountry,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                  <div className="mt-2">
+                    Notify:{" "}
+                    <span className="font-semibold">{notify?.name || "—"}</span>
+                  </div>
+                  <div>{notify?.contact || ""}</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-3 divider" />
+            <div className="mt-3 divider" />
 
-          <div className="mt-3">
-            <div className="rowhead">Items</div>
-            <div className="mt-2 border border-zinc-200 rounded-lg overflow-hidden">
-              <table className="w-full text-[10px]">
-                <thead className="bg-zinc-50">
-                  <tr>
-                    <th className="text-left px-2 py-1">SKU / Product</th>
-                    <th className="text-left px-2 py-1">Size</th>
-                    <th className="text-right px-2 py-1">Qty</th>
-                    <th className="text-right px-2 py-1">Unit Price</th>
-                    <th className="text-right px-2 py-1">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleItems.map((it: any) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="px-2 py-1">
-                        <span className="text-zinc-500">{it?.product?.sku || ""}</span>
-                        <span className="ml-2">{it?.product?.name || "Item"}</span>
-                      </td>
-                      <td className="px-2 py-1">{it?.variant?.sizeLabel || "—"}</td>
-                      <td className="px-2 py-1 text-right">{it?.qty}</td>
-                      <td className="px-2 py-1 text-right">{currency} {money(it?.unitPrice)}</td>
-                      <td className="px-2 py-1 text-right">{currency} {money(Number(it?.qty || 0) * Number(it?.unitPrice || 0))}</td>
+            <div className="mt-3">
+              <div className="rowhead">Items</div>
+
+              <div className="mt-2 overflow-hidden rounded-[10px] border border-zinc-200">
+                <table className="items-table w-full text-[9px]">
+                  <thead>
+                    <tr>
+                      <th className="px-2 py-1.5 text-left">SKU / Product</th>
+                      <th className="px-2 py-1.5 text-left">Size</th>
+                      <th className="px-2 py-1.5 text-right">Qty</th>
+                      <th className="px-2 py-1.5 text-right">Unit Price</th>
+                      <th className="px-2 py-1.5 text-right">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {hiddenCount ? (
-              <div className="tiny mt-1">+{hiddenCount} more items not shown (1-page print limit)</div>
-            ) : null}
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 mt-3">
-            <div className="col-span-2">
-              <div className="rowhead">Signature</div>
-              <div className="mt-2 body">Signer: <span className="font-semibold">{signerName || "—"}</span></div>
-              {signatureSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={signatureSrc} alt="Signature" className="mt-2 h-16 w-full object-contain border border-zinc-200 rounded-lg" />
-              ) : (
-                <div className="tiny mt-2">No signature attached</div>
-              )}
-            </div>
-
-            <div>
-              <div className="rowhead">Totals</div>
-              <div className="mt-2 space-y-1 body">
-                <div className="flex justify-between"><span>Items</span><span>{currency} {money(derivedItemsTotal)}</span></div>
-                <div className="flex justify-between"><span>Freight</span><span>{currency} {money(freight)}</span></div>
-                <div className="flex justify-between"><span>Insurance</span><span>{currency} {money(insurance)}</span></div>
-                <div className="flex justify-between"><span>Other</span><span>{currency} {money(otherCharge)}</span></div>
-                <div className="flex justify-between"><span>Discount</span><span>- {currency} {money(discount)}</span></div>
-                <div className="mt-2 divider" />
-                <div className="flex justify-between font-semibold"><span>Grand Total</span><span>{currency} {money(derivedGrandTotal)}</span></div>
+                  </thead>
+                  <tbody>
+                    {allItems.map((it: any) => (
+                      <tr key={it.id} className="border-t border-zinc-200/80">
+                        <td className="px-2 py-[5px]">
+                          <span className="text-zinc-500">{it?.product?.sku || ""}</span>
+                          <span className="ml-2">{it?.product?.name || "Item"}</span>
+                        </td>
+                        <td className="px-2 py-[5px]">{it?.variant?.sizeLabel || "—"}</td>
+                        <td className="px-2 py-[5px] text-right">{it?.qty}</td>
+                        <td className="px-2 py-[5px] text-right">
+                          {currency} {money(it?.unitPrice)}
+                        </td>
+                        <td className="px-2 py-[5px] text-right">
+                          {currency}{" "}
+                          {money(Number(it?.qty || 0) * Number(it?.unitPrice || 0))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          </div>
 
-          <div className="tiny mt-4">Generated: {new Date().toLocaleString()}</div>
+            <div className="avoid-break mt-4 grid grid-cols-3 gap-4">
+              <div className="col-span-2">
+                <div className="rowhead">Signature</div>
+                <div className="mt-2 body">
+                  Signer: <span className="font-semibold">{signerName || "—"}</span>
+                </div>
+                {signatureSrc ? (
+                  <img
+                    src={signatureSrc}
+                    alt="Signature"
+                    className="mt-2 h-16 w-full rounded-lg border border-zinc-200 object-contain"
+                  />
+                ) : (
+                  <div className="tiny mt-2">No signature attached</div>
+                )}
+              </div>
+
+              <div>
+                <div className="rowhead">Totals</div>
+                <div className="mt-2 space-y-1 body">
+                  <div className="flex justify-between">
+                    <span>Items</span>
+                    <span>
+                      {currency} {money(derivedItemsTotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Freight</span>
+                    <span>
+                      {currency} {money(freight)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Insurance</span>
+                    <span>
+                      {currency} {money(insurance)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Other</span>
+                    <span>
+                      {currency} {money(otherCharge)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Discount</span>
+                    <span>
+                      - {currency} {money(discount)}
+                    </span>
+                  </div>
+                  <div className="mt-2 divider" />
+                  <div className="flex justify-between font-semibold">
+                    <span>Grand Total</span>
+                    <span>
+                      {currency} {money(derivedGrandTotal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="tiny mt-4">Generated: {new Date().toLocaleString()}</div>
+          </div>
         </div>
       </div>
+
+      <div className="print-page-counter" />
     </div>
   );
 }
