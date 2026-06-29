@@ -727,6 +727,53 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Order create failed");
 
+      try {
+        const emailItems = lines
+          .filter((l) => l.variantId && l.sku && Number(l.qty) > 0 && Number(l.unitPrice) > 0)
+          .map((l) => ({
+            collection: l.collection,
+            sku: l.sku,
+            productName: l.productName,
+            size: l.sizeLabel,
+            unit: l.unit,
+            qty: Number(l.qty),
+            unitPrice: Number(l.unitPrice || 0),
+            total: Number(l.qty || 0) * Number(l.unitPrice || 0),
+          }));
+
+        await fetch("/api/send-order-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: json?.order?.id || json?.id || "",
+            poNumber,
+            poDate,
+            buyerPoRef,
+            orderType,
+            currency,
+            incoterm: "EXW",
+            deliveryMethod,
+            containerType: deliveryMethod === "Sea" ? containerType : "",
+            packingType,
+            destinationPort,
+            requestedDispatchDate,
+            billing,
+            shipTo,
+            notifyParty,
+            notes,
+            freight,
+            insurance,
+            discount,
+            otherCharge,
+            itemsTotal,
+            grandTotal,
+            items: emailItems,
+          }),
+        });
+      } catch (emailError) {
+        console.error("Order created, but email notification failed:", emailError);
+      }
+
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(PLACE_ORDER_DRAFT_KEY);
       }
