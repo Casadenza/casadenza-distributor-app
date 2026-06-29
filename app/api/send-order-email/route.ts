@@ -3,6 +3,8 @@ import nodemailer from "nodemailer";
 
 export const runtime = "nodejs";
 
+const LOGO_URL = "https://portal.casadenza.app/brand/casadenza-logo.png";
+
 function formatMoney(value: unknown) {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return "0.00";
@@ -19,7 +21,7 @@ function isValidEmail(value: unknown) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function buildItemsHtml(items: any[]) {
+function buildAdminItemsHtml(items: any[]) {
   return items
     .map((item: any, index: number) => {
       const qty = Number(item.quantity || item.qty || 0);
@@ -44,6 +46,32 @@ function buildItemsHtml(items: any[]) {
     .join("");
 }
 
+function buildClientItemsHtml(items: any[], currency: string) {
+  return items
+    .map((item: any, index: number) => {
+      const qty = Number(item.quantity || item.qty || 0);
+      const unitPrice = Number(item.unitPrice || item.unit_price || 0);
+      const total =
+        typeof item.total === "number" ? Number(item.total || 0) : qty * unitPrice;
+
+      return `
+        <tr>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;color:#777;font-size:13px;">${index + 1}</td>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;font-size:13px;">
+            <div style="font-weight:700;color:#171717;">${safeText(item.productName || item.product_name || item.name)}</div>
+            <div style="font-size:12px;color:#777;margin-top:3px;">${safeText(item.collection || item.collectionName)} • ${safeText(item.sku || item.SKU)}</div>
+          </td>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;font-size:13px;color:#333;">${safeText(item.size)}</td>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;font-size:13px;color:#333;">${safeText(item.unit)}</td>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;text-align:right;font-size:13px;color:#333;">${qty}</td>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;text-align:right;font-size:13px;color:#333;">${currency} ${formatMoney(unitPrice)}</td>
+          <td style="padding:12px 10px;border-bottom:1px solid #ece7dc;text-align:right;font-size:13px;font-weight:700;color:#171717;">${currency} ${formatMoney(total)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
 function calculateGrandTotal(orderData: any, items: any[]) {
   if (typeof orderData.grandTotal === "number") return Number(orderData.grandTotal || 0);
 
@@ -55,7 +83,7 @@ function calculateGrandTotal(orderData: any, items: any[]) {
 }
 
 function buildAdminEmailHtml(orderData: any, items: any[], grandTotal: number) {
-  const itemsHtml = buildItemsHtml(items);
+  const itemsHtml = buildAdminItemsHtml(items);
 
   return `
     <div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">
@@ -95,8 +123,8 @@ function buildAdminEmailHtml(orderData: any, items: any[], grandTotal: number) {
           <td style="padding:6px 0;">${safeText(orderData.destinationPort)}</td>
         </tr>
         <tr>
-          <td style="padding:6px 0;"><strong>Confirmation Email:</strong></td>
-          <td style="padding:6px 0;">${safeText(orderData.signerEmail || orderData.clientEmail)}</td>
+          <td style="padding:6px 0;"><strong>Client Confirmation Email:</strong></td>
+          <td style="padding:6px 0;">${safeText(orderData.orderEmail || orderData.signerEmail || orderData.clientEmail)}</td>
         </tr>
       </table>
 
@@ -192,123 +220,165 @@ function buildAdminEmailHtml(orderData: any, items: any[], grandTotal: number) {
 }
 
 function buildClientEmailHtml(orderData: any, items: any[], grandTotal: number) {
-  const itemsHtml = buildItemsHtml(items);
+  const currency = safeText(orderData.currency || "");
+  const itemsHtml = buildClientItemsHtml(items, currency);
   const customerName =
     safeText(orderData.signerName).trim() ||
     safeText(orderData.shipTo?.contactName).trim() ||
     "Customer";
 
   return `
-    <div style="margin:0;padding:0;background:#f6f5f2;font-family:Arial,sans-serif;color:#222;">
-      <div style="max-width:860px;margin:0 auto;padding:28px 16px;">
-        <div style="background:#111;color:#fff;padding:22px 26px;border-radius:16px 16px 0 0;">
-          <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#d6c6a1;font-weight:bold;">Casadenza</div>
-          <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;">Order Received Successfully</h1>
-        </div>
+    <div style="margin:0;padding:0;background:#f4f1ea;font-family:Arial,Helvetica,sans-serif;color:#181818;">
+      <div style="display:none;max-height:0;overflow:hidden;">
+        Your Casadenza order has been received. Our team will review it and share the official Proforma Invoice shortly.
+      </div>
 
-        <div style="background:#fff;border:1px solid #e7e1d6;border-top:0;padding:26px;border-radius:0 0 16px 16px;">
-          <p style="margin:0 0 14px;font-size:15px;">Dear ${safeText(customerName)},</p>
+      <div style="max-width:920px;margin:0 auto;padding:34px 14px;">
+        <div style="background:#ffffff;border:1px solid #ded6c7;border-radius:22px;overflow:hidden;box-shadow:0 14px 40px rgba(30,24,12,0.08);">
 
-          <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">
-            Thank you for placing your order with Casadenza. We have successfully received your order request.
-            Our team will review the details and share the official Proforma Invoice shortly.
-          </p>
+          <div style="padding:30px 34px 24px;background:#ffffff;border-bottom:1px solid #e8dfcf;">
+            <img
+              src="${LOGO_URL}"
+              alt="Casadenza"
+              style="display:block;width:230px;max-width:100%;height:auto;margin:0 0 24px;"
+            />
 
-          <div style="background:#faf8f3;border:1px solid #e7e1d6;border-radius:12px;padding:16px;margin:22px 0;">
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
-              <tr>
-                <td style="padding:6px 0;color:#777;">PO Number</td>
-                <td style="padding:6px 0;text-align:right;font-weight:bold;">${safeText(orderData.poNumber)}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#777;">PO Date</td>
-                <td style="padding:6px 0;text-align:right;">${safeText(orderData.poDate)}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#777;">Buyer PO Reference</td>
-                <td style="padding:6px 0;text-align:right;">${safeText(orderData.buyerPoRef) || "—"}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#777;">Incoterm</td>
-                <td style="padding:6px 0;text-align:right;">EXW</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#777;">Delivery Method</td>
-                <td style="padding:6px 0;text-align:right;">${safeText(orderData.deliveryMethod)}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#777;">Currency</td>
-                <td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)}</td>
-              </tr>
-            </table>
+            <div style="display:inline-block;background:#111;color:#d7bf83;border-radius:999px;padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
+              Order Acknowledgement
+            </div>
+
+            <h1 style="margin:16px 0 8px;font-size:28px;line-height:1.25;color:#111;font-weight:800;">
+              Your order has been received successfully.
+            </h1>
+
+            <p style="margin:0;font-size:15px;line-height:1.75;color:#5f5a50;">
+              Thank you for placing your order with Casadenza. Our team will review the details and share the official Proforma Invoice shortly.
+            </p>
           </div>
 
-          <h2 style="font-size:16px;margin:0 0 12px;">Order Items</h2>
+          <div style="padding:30px 34px;">
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#222;">
+              Dear <strong>${safeText(customerName)}</strong>,
+            </p>
 
-          <div style="overflow-x:auto;">
-            <table style="border-collapse:collapse;width:100%;font-size:13px;">
-              <thead>
-                <tr style="background:#f3f0e8;">
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:left;">#</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:left;">Collection</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:left;">SKU</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:left;">Product Name</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:left;">Size</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:left;">Unit</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:right;">Qty</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:right;">Unit Price</th>
-                  <th style="padding:9px;border:1px solid #e1dacd;text-align:right;">Total</th>
+            <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#4a4a4a;">
+              We have successfully received your order request. Below is a summary of the order submitted through the Casadenza Distributor Portal.
+            </p>
+
+            <div style="background:#fbfaf7;border:1px solid #e6decf;border-radius:16px;padding:20px 22px;margin:0 0 26px;">
+              <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                <tr>
+                  <td style="padding:7px 0;color:#777;">PO Number</td>
+                  <td style="padding:7px 0;text-align:right;font-weight:800;color:#111;">${safeText(orderData.poNumber)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${
-                  itemsHtml ||
-                  `<tr><td colspan="9" style="padding:9px;border:1px solid #e1dacd;">No items found.</td></tr>`
-                }
-              </tbody>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">PO Date</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">${safeText(orderData.poDate)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">Buyer PO Reference</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">${safeText(orderData.buyerPoRef) || "—"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">Order Type</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">${safeText(orderData.orderType)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">Incoterm</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">EXW</td>
+                </tr>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">Delivery Method</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">${safeText(orderData.deliveryMethod)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">Destination Port</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">${safeText(orderData.destinationPort) || "—"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:7px 0;color:#777;">Currency</td>
+                  <td style="padding:7px 0;text-align:right;color:#222;">${currency}</td>
+                </tr>
+              </table>
+            </div>
+
+            <h2 style="margin:0 0 14px;font-size:18px;color:#111;font-weight:800;">Order Items</h2>
+
+            <div style="border:1px solid #e6decf;border-radius:16px;overflow:hidden;margin-bottom:24px;">
+              <table style="border-collapse:collapse;width:100%;font-size:13px;background:#fff;">
+                <thead>
+                  <tr style="background:#111;color:#fff;">
+                    <th style="padding:12px 10px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;">#</th>
+                    <th style="padding:12px 10px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Product</th>
+                    <th style="padding:12px 10px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Size</th>
+                    <th style="padding:12px 10px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Unit</th>
+                    <th style="padding:12px 10px;text-align:right;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Qty</th>
+                    <th style="padding:12px 10px;text-align:right;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Unit Price</th>
+                    <th style="padding:12px 10px;text-align:right;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    itemsHtml ||
+                    `<tr><td colspan="7" style="padding:14px;border-bottom:1px solid #ece7dc;">No items found.</td></tr>`
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <table style="border-collapse:collapse;width:100%;max-width:460px;margin-left:auto;font-size:14px;">
+              <tr>
+                <td style="padding:7px 0;color:#666;">Items Total</td>
+                <td style="padding:7px 0;text-align:right;color:#222;">${currency} ${formatMoney(orderData.itemsTotal)}</td>
+              </tr>
+              <tr>
+                <td style="padding:7px 0;color:#666;">Freight</td>
+                <td style="padding:7px 0;text-align:right;color:#222;">${currency} ${formatMoney(orderData.freight)}</td>
+              </tr>
+              <tr>
+                <td style="padding:7px 0;color:#666;">Insurance</td>
+                <td style="padding:7px 0;text-align:right;color:#222;">${currency} ${formatMoney(orderData.insurance)}</td>
+              </tr>
+              <tr>
+                <td style="padding:7px 0;color:#666;">Discount</td>
+                <td style="padding:7px 0;text-align:right;color:#222;">${currency} ${formatMoney(orderData.discount)}</td>
+              </tr>
+              <tr>
+                <td style="padding:7px 0;color:#666;">Other Charge</td>
+                <td style="padding:7px 0;text-align:right;color:#222;">${currency} ${formatMoney(orderData.otherCharge)}</td>
+              </tr>
+              <tr>
+                <td style="padding:14px 0;border-top:2px solid #111;font-weight:800;font-size:16px;color:#111;">Order Total</td>
+                <td style="padding:14px 0;border-top:2px solid #111;text-align:right;font-weight:800;font-size:16px;color:#111;">${currency} ${formatMoney(grandTotal)}</td>
+              </tr>
             </table>
+
+            <div style="background:#fff8e4;border:1px solid #e5cc87;border-radius:16px;padding:16px 18px;margin-top:26px;font-size:13px;line-height:1.7;color:#5a4314;">
+              <strong>Important:</strong> This email is an order acknowledgement only and is not the final Proforma Invoice.
+              The official Proforma Invoice will be shared after review and confirmation by the Casadenza team.
+            </div>
+
+            ${
+              orderData.notes
+                ? `<div style="margin-top:22px;background:#fafafa;border:1px solid #e6e6e6;border-radius:14px;padding:15px 16px;font-size:13px;line-height:1.6;color:#444;">
+                    <strong style="color:#111;">Order Notes:</strong><br/>${safeText(orderData.notes)}
+                  </div>`
+                : ""
+            }
+
+            <p style="margin:26px 0 0;font-size:14px;line-height:1.8;color:#444;">
+              If any correction is required in the order details, please reply to this email and our team will assist you.
+            </p>
+
+            <p style="margin:20px 0 0;font-size:14px;line-height:1.8;color:#222;">
+              Warm regards,<br />
+              <strong>Casadenza Team</strong>
+            </p>
           </div>
 
-          <table style="border-collapse:collapse;margin-top:18px;width:100%;max-width:420px;margin-left:auto;font-size:14px;">
-            <tr>
-              <td style="padding:6px 0;">Items Total</td>
-              <td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.itemsTotal)}</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0;">Freight</td>
-              <td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.freight)}</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0;">Insurance</td>
-              <td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.insurance)}</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0;">Discount</td>
-              <td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.discount)}</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0;">Other Charge</td>
-              <td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.otherCharge)}</td>
-            </tr>
-            <tr>
-              <td style="padding:12px 0;border-top:1px solid #ddd;font-weight:bold;">Order Total</td>
-              <td style="padding:12px 0;border-top:1px solid #ddd;text-align:right;font-weight:bold;">${safeText(orderData.currency)} ${formatMoney(grandTotal)}</td>
-            </tr>
-          </table>
-
-          <div style="background:#fff8e6;border:1px solid #edd79a;border-radius:12px;padding:14px;margin-top:22px;font-size:13px;line-height:1.6;color:#5b4618;">
-            <strong>Important:</strong> This email is only an order acknowledgement and is not the final Proforma Invoice.
-            The official Proforma Invoice will be shared after review and confirmation by our team.
+          <div style="background:#111;color:#d6c6a1;padding:16px 34px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;">
+            Casadenza Distributor Portal
           </div>
-
-          <p style="margin:22px 0 0;font-size:14px;line-height:1.7;">
-            If any correction is required in the order details, please reply to this email.
-          </p>
-
-          <p style="margin:18px 0 0;font-size:14px;line-height:1.7;">
-            Warm regards,<br />
-            <strong>Casadenza Team</strong>
-          </p>
         </div>
       </div>
     </div>
@@ -357,7 +427,9 @@ export async function POST(req: Request) {
       html: buildAdminEmailHtml(orderData, items, grandTotal),
     });
 
-    const clientEmail = safeText(orderData.orderEmail || orderData.signerEmail || orderData.clientEmail).trim();
+    const clientEmail = safeText(
+      orderData.orderEmail || orderData.signerEmail || orderData.clientEmail
+    ).trim();
 
     if (isValidEmail(clientEmail)) {
       await transporter.sendMail({
