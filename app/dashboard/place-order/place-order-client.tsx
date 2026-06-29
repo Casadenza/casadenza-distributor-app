@@ -254,6 +254,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
   // ---- Signature ----
   const [signerName, setSignerName] = useState("");
+  const [orderEmail, setOrderEmail] = useState("");
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>("");
   const [signatureInfo, setSignatureInfo] = useState<string>("");
@@ -605,6 +606,9 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
     setSaving(true);
 
     try {
+      const confirmationEmail = orderEmail.trim();
+      const isValidConfirmationEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(confirmationEmail);
+
       if (!shipTo.country || !shipTo.address1 || !shipTo.phone) {
         showPopup("error", "Missing Shipping Details", "Please fill Country, Address 1, and Phone before submitting the order.");
         setSaving(false);
@@ -619,6 +623,18 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
       if (!signerName.trim()) {
         showPopup("error", "Signer Name Required", "Please enter Signer Name to continue.");
+        setSaving(false);
+        return;
+      }
+
+      if (!confirmationEmail) {
+        showPopup("error", "Email Required", "Please enter the email address where the order acknowledgement should be sent.");
+        setSaving(false);
+        return;
+      }
+
+      if (!isValidConfirmationEmail) {
+        showPopup("error", "Invalid Email", "Please enter a valid email address for the order acknowledgement.");
         setSaving(false);
         return;
       }
@@ -711,6 +727,8 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
           unitPrice: it.unitPrice,
         })),
 
+        orderEmail: confirmationEmail,
+
         signature: {
           signerName: signerName.trim(),
           dataUrl: signatureDataUrl,
@@ -757,6 +775,8 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
             packingType,
             destinationPort,
             requestedDispatchDate,
+            orderEmail: confirmationEmail,
+            signerName: signerName.trim(),
             billing,
             shipTo,
             notifyParty,
@@ -786,6 +806,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
       setDiscount(0);
       setOtherCharge(0);
       setSignerName("");
+      setOrderEmail("");
       setSignatureFile(null);
       setSignatureDataUrl("");
       setSignatureInfo("");
@@ -1271,6 +1292,14 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                   value={signerName}
                   onChange={setSignerName}
                   placeholder="Required"
+                />
+
+                <Field
+                  label="Email *"
+                  value={orderEmail}
+                  onChange={setOrderEmail}
+                  placeholder="Order acknowledgement email"
+                  type="email"
                 />
 
                 <div>
