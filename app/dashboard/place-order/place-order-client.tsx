@@ -56,10 +56,11 @@ type OrdersListResponse = { ok: boolean; items?: any[]; orders?: any[] };
 // ---------------- Constants ----------------
 const UNITS = ["SHEET", "SQM", "SQFT"] as const;
 const ORDER_TYPES = ["Sample", "Trial", "Regular", "Project", "Repeat"] as const;
-const INCOTERMS = ["EXW", "FOB", "CIF", "DAP", "DDP"] as const;
+const INCOTERMS = ["EXW"] as const;
 const DELIVERY = ["Sea", "Air", "Courier"] as const;
 const CONTAINERS = ["20ft", "40ft", "LCL"] as const;
 const PACKING = ["Pallet", "Crate", "Roll"] as const;
+const PLACE_ORDER_DRAFT_KEY = "casadenza-place-order-draft-v1";
 
 type Unit = (typeof UNITS)[number];
 
@@ -119,6 +120,43 @@ function lineTemplate(): Line {
     qty: 1,
     unitPrice: 0,
   };
+}
+
+function normalizeLineDraft(value: any): Line | null {
+  if (!value || typeof value !== "object") return null;
+
+  const unit = UNITS.includes(value.unit) ? value.unit : "SHEET";
+  const qty = Number(value.qty || 1);
+
+  return {
+    collection: String(value.collection || "All"),
+    sku: String(value.sku || ""),
+    productName: String(value.productName || ""),
+    variantId: String(value.variantId || ""),
+    sizeLabel: String(value.sizeLabel || ""),
+    unit,
+    qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+    unitPrice: Number(value.unitPrice || 0),
+  };
+}
+
+function readDraftLines(): Line[] | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(PLACE_ORDER_DRAFT_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    const savedLines = Array.isArray(parsed?.lines) ? parsed.lines : [];
+    const cleanLines = savedLines
+      .map(normalizeLineDraft)
+      .filter((line: Line | null): line is Line => Boolean(line));
+
+    return cleanLines.length ? cleanLines : null;
+  } catch {
+    return null;
+  }
 }
 
 function getRepeatOrderLabel(order: any) {
@@ -222,6 +260,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
   // ---- Items ----
   const [lines, setLines] = useState<Line[]>([lineTemplate()]);
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
   // ---- UI status ----
   const [saving, setSaving] = useState(false);
@@ -289,6 +328,17 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
     return typeof v === "number" && Number.isFinite(v) ? v : 0;
   }
 
+  function unitPriceFromRow(row: PricingRow | undefined, unit: Unit) {
+    const v = row?.price?.unitPrices?.[unit];
+    return typeof v === "number" && Number.isFinite(v) ? v : 0;
+  }
+
+  function firstRowForSku(sku: string, rows: PricingRow[] = pricingRows) {
+    const cleanSku = String(sku || "").trim();
+    if (!cleanSku) return undefined;
+    return rows.find((r) => String(r.product?.sku || "").trim() === cleanSku);
+  }
+
   function setLine(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   }
@@ -329,10 +379,18 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
       setLines((prev) =>
         prev.map((line) => {
-          if (!line.variantId) return line;
+          const fallbackRow = firstRowForSku(line.sku, validRows);
+
+          if (!line.variantId) {
+            return {
+              ...line,
+              collection: fallbackRow?.product?.collection || line.collection || "All",
+              productName: fallbackRow?.product?.name || line.productName,
+            };
+          }
 
           const row = m.get(line.variantId);
-          const nextPrice = row ? unitPriceForVariant(line.variantId, line.unit) : 0;
+          const nextPrice = unitPriceFromRow(row, line.unit);
 
           if (!row || nextPrice <= 0) {
             return {
@@ -340,9 +398,9 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
               variantId: "",
               sizeLabel: "",
               unitPrice: 0,
-              productName: row?.product?.name || line.productName,
+              productName: row?.product?.name || fallbackRow?.product?.name || line.productName,
               sku: row?.product?.sku || line.sku,
-              collection: row?.product?.collection || line.collection,
+              collection: row?.product?.collection || fallbackRow?.product?.collection || line.collection,
             };
           }
 
@@ -401,7 +459,8 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
   function applyRepeatOrder(order: any) {
     const meta = safeJson(order?.notes);
 
-    if (meta?.incoterm) setIncoterm(meta.incoterm);
+    // Incoterm is fixed to EXW for distributor orders. Do not restore old FOB/CIF/DAP/DDP values from repeat orders.
+    setIncoterm("EXW");
     if (meta?.deliveryMethod) setDeliveryMethod(meta.deliveryMethod);
     if (meta?.containerType) setContainerType(meta.containerType);
     if (meta?.packingType) setPackingType(meta.packingType);
@@ -489,6 +548,46 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
     if (deliveryMethod !== "Sea") setContainerType("");
     else if (!containerType) setContainerType("20ft");
   }, [deliveryMethod, containerType]);
+
+  // ---------------- Place order draft ----------------
+  useEffect(() => {
+    const savedLines = readDraftLines();
+    if (savedLines?.length) setLines(savedLines);
+    setDraftHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated || typeof window === "undefined") return;
+
+    const hasUsefulLine = lines.some(
+      (line) => line.sku || line.variantId || line.productName || line.sizeLabel
+    );
+
+    try {
+      if (!hasUsefulLine) {
+        window.localStorage.removeItem(PLACE_ORDER_DRAFT_KEY);
+        return;
+      }
+
+      window.localStorage.setItem(
+        PLACE_ORDER_DRAFT_KEY,
+        JSON.stringify({
+          lines: lines.map((line) => ({
+            collection: line.collection,
+            sku: line.sku,
+            productName: line.productName,
+            variantId: line.variantId,
+            sizeLabel: line.sizeLabel,
+            unit: line.unit,
+            qty: line.qty,
+            unitPrice: line.unitPrice,
+          })),
+        })
+      );
+    } catch {
+      // Draft persistence is only a UI convenience; order logic must not fail because of storage.
+    }
+  }, [draftHydrated, lines]);
 
   // ---------------- Initial load ----------------
   useEffect(() => {
@@ -627,6 +726,10 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Order create failed");
+
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(PLACE_ORDER_DRAFT_KEY);
+      }
 
       setLines([lineTemplate()]);
       setBuyerPoRef("");
@@ -774,17 +877,12 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
 
               <div>
                 <Label>Incoterm</Label>
-                <select
-                  value={incoterm}
-                  onChange={(e) => setIncoterm(e.target.value as any)}
-                  className="w-full h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black transition-all"
-                >
-                  {INCOTERMS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  value="EXW"
+                  readOnly
+                  className="w-full h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none text-zinc-700 cursor-not-allowed"
+                  title="Incoterm is fixed to EXW"
+                />
               </div>
 
               <div>
@@ -854,15 +952,21 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
         </div>
 
         <Section title="Order Items" icon={<Package size={14} />}>
-          <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-              <div className="col-span-2">Collection</div>
-              <div className="col-span-2">SKU</div>
-              <div className="col-span-3">Size</div>
-              <div className="col-span-1">Unit</div>
-              <div className="col-span-1 text-right">Qty</div>
-              <div className="col-span-2 text-right">Unit Price</div>
-              <div className="col-span-1 text-right">Actions</div>
+          <div className="overflow-x-auto pb-1">
+            <div className="w-full min-w-[960px] space-y-3">
+              <div
+                className="grid gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400"
+                style={{ gridTemplateColumns: "minmax(86px, 0.8fr) minmax(86px, 0.8fr) minmax(125px, 1.1fr) minmax(115px, 0.95fr) 70px minmax(90px, 0.9fr) minmax(100px, 0.9fr) minmax(120px, 1fr) 54px" }}
+              >
+              <div>Collection</div>
+              <div>SKU</div>
+              <div>Product Name</div>
+              <div>Size</div>
+              <div>Unit</div>
+              <div className="text-right">Qty</div>
+              <div className="text-right">Unit Price</div>
+              <div className="text-right">Total</div>
+              <div className="text-center">Actions</div>
             </div>
 
             {lines.map((l, i) => {
@@ -870,7 +974,11 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
               const variants = l.sku ? variantsForSku(l.collection, l.sku, l.unit) : [];
 
               return (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                <div
+                  key={i}
+                  className="grid gap-2 items-center"
+                  style={{ gridTemplateColumns: "minmax(86px, 0.8fr) minmax(86px, 0.8fr) minmax(125px, 1.1fr) minmax(115px, 0.95fr) 70px minmax(90px, 0.9fr) minmax(100px, 0.9fr) minmax(120px, 1fr) 54px" }}
+                >
                   <select
                     value={l.collection}
                     onChange={(e) => {
@@ -884,7 +992,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                         unitPrice: 0,
                       });
                     }}
-                    className="col-span-2 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-2 outline-none focus:border-black"
                   >
                     {collections.map((c) => (
                       <option key={c} value={c}>
@@ -897,15 +1005,17 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                     value={l.sku}
                     onChange={(e) => {
                       const sku = e.target.value;
+                      const selectedRow = firstRowForSku(sku);
                       setLine(i, {
                         sku,
+                        collection: selectedRow?.product?.collection || l.collection,
                         variantId: "",
                         sizeLabel: "",
-                        productName: "",
+                        productName: selectedRow?.product?.name || "",
                         unitPrice: 0,
                       });
                     }}
-                    className="col-span-2 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
                   >
                     <option value="">Select SKU</option>
                     {skuList.map((s) => (
@@ -914,6 +1024,15 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                       </option>
                     ))}
                   </select>
+
+                  <input
+                    type="text"
+                    value={l.productName}
+                    readOnly
+                    placeholder="Product name"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none text-zinc-700 cursor-not-allowed"
+                    title={l.productName || "Product name will appear after SKU selection"}
+                  />
 
                   <select
                     value={l.variantId}
@@ -931,7 +1050,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                         unitPrice: nextPrice,
                       });
                     }}
-                    className="col-span-3 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black disabled:opacity-50"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black disabled:opacity-50"
                     disabled={!l.sku}
                   >
                     <option value="">{l.sku ? "Select Size" : "Select SKU First"}</option>
@@ -971,7 +1090,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                       const nextPrice = unitPriceForVariant(l.variantId, unit);
                       setLine(i, { unit, unitPrice: nextPrice });
                     }}
-                    className="col-span-1 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black"
                   >
                     {UNITS.map((u) => (
                       <option key={u} value={u}>
@@ -984,7 +1103,7 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                     type="number"
                     value={l.qty}
                     onChange={(e) => setLine(i, { qty: Number(e.target.value || 0) })}
-                    className="col-span-1 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black text-right"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none focus:border-black text-right"
                     min={1}
                   />
 
@@ -992,11 +1111,19 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
                     type="number"
                     value={l.unitPrice}
                     readOnly
-                    className="col-span-2 h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-3 outline-none text-right text-zinc-700 cursor-not-allowed"
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-2 outline-none text-right text-zinc-700 cursor-not-allowed"
                     title="Unit Price is auto-applied from your distributor pricing scheme"
                   />
 
-                  <div className="col-span-1 flex justify-end gap-2">
+                  <input
+                    type="text"
+                    value={money(Number(l.qty || 0) * Number(l.unitPrice || 0))}
+                    readOnly
+                    className="h-9 text-xs bg-zinc-50 border border-zinc-100 rounded px-2 outline-none text-right text-zinc-700 cursor-not-allowed"
+                    title="Line total = Qty x Unit Price"
+                  />
+
+                  <div className="flex justify-center">
                     <button
                       type="button"
                       onClick={() => removeLine(i)}
@@ -1010,17 +1137,18 @@ export default function PlaceOrderClient({ products }: { products: Product[] }) 
               );
             })}
 
-            <div className="flex items-center justify-between pt-2">
-              <button
+              <div className="flex items-center justify-between pt-2">
+                <button
                 type="button"
                 onClick={addLine}
                 className="inline-flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 hover:border-emerald-200 transition-all"
               >
                 <Plus size={14} /> Add Line
-              </button>
+                </button>
 
-              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                {loadingPricing ? "Loading pricing..." : ""}
+                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  {loadingPricing ? "Loading pricing..." : ""}
+                </div>
               </div>
             </div>
           </div>
