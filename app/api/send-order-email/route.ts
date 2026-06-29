@@ -357,7 +357,7 @@ export async function POST(req: Request) {
       html: buildAdminEmailHtml(orderData, items, grandTotal),
     });
 
-    const clientEmail = safeText(orderData.signerEmail || orderData.clientEmail).trim();
+    const clientEmail = safeText(orderData.orderEmail || orderData.signerEmail || orderData.clientEmail).trim();
 
     if (isValidEmail(clientEmail)) {
       await transporter.sendMail({
