@@ -49,15 +49,15 @@ function buildAdminItemsHtml(items: any[]) {
 
       return `
         <tr>
-          <td style="padding:8px;border:1px solid #ddd;">${index + 1}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${safeText(item.collection || item.collectionName)}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${safeText(item.sku || item.SKU)}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${safeText(item.productName || item.product_name || item.name)}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${safeText(item.size)}</td>
-          <td style="padding:8px;border:1px solid #ddd;">${safeText(item.unit)}</td>
-          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${qty}</td>
-          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${formatMoney(unitPrice)}</td>
-          <td style="padding:8px;border:1px solid #ddd;text-align:right;">${formatMoney(total)}</td>
+          <td style="padding:7px 7px;border:1px solid #e8e3d9;text-align:center;color:#222;font-size:11px;line-height:1.25;">${index + 1}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;color:#222;font-size:11px;line-height:1.25;">${safeText(item.collection || item.collectionName)}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;color:#222;font-size:11px;line-height:1.25;white-space:nowrap;">${safeText(item.sku || item.SKU)}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;color:#111;font-size:11px;line-height:1.25;font-weight:700;">${safeText(item.productName || item.product_name || item.name)}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;text-align:center;color:#222;font-size:11px;line-height:1.25;white-space:nowrap;">${safeText(item.size)}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;text-align:center;color:#222;font-size:11px;line-height:1.25;white-space:nowrap;">${safeText(item.unit)}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;text-align:center;color:#222;font-size:11px;line-height:1.25;">${qty}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;text-align:right;color:#222;font-size:11px;line-height:1.25;white-space:nowrap;">${formatMoney(unitPrice)}</td>
+          <td style="padding:7px 8px;border:1px solid #e8e3d9;text-align:right;color:#222;font-size:11px;line-height:1.25;white-space:nowrap;">${formatMoney(total)}</td>
         </tr>
       `;
     })
@@ -89,70 +89,144 @@ function buildClientItemsHtml(items: any[], currency: string) {
 }
 
 function buildAdminEmailHtml(orderData: any, items: any[], grandTotal: number) {
+  const currency = safeText(orderData.currency || "");
   const itemsHtml = buildAdminItemsHtml(items);
+  const discountValue = Number(orderData.discount || 0);
+
+  const clientEmail = safeText(
+    orderData.orderEmail || orderData.signerEmail || orderData.clientEmail
+  ).trim();
+
+  const shipAddress = [
+    orderData.shipTo?.address1,
+    orderData.shipTo?.address2,
+    orderData.shipTo?.city,
+    orderData.shipTo?.state,
+    orderData.shipTo?.postal,
+    orderData.shipTo?.country,
+  ]
+    .map((value) => safeText(value).trim())
+    .filter(Boolean)
+    .join(", ");
 
   return `
-    <div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">
-      <h2 style="margin:0 0 12px;">New Distributor Order Received</h2>
+    <div style="margin:0;padding:0;background:#f7f6f3;font-family:Arial,Helvetica,sans-serif;color:#171717;font-size:13px;">
+      <div style="max-width:980px;margin:0 auto;padding:22px 10px;">
+        <div style="background:#ffffff;border:1px solid #eee9df;border-radius:10px;overflow:hidden;">
 
-      <table style="border-collapse:collapse;margin-bottom:18px;width:100%;max-width:760px;">
-        <tr><td style="padding:6px 0;width:190px;"><strong>PO Number:</strong></td><td style="padding:6px 0;">${safeText(orderData.poNumber)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>PO Date:</strong></td><td style="padding:6px 0;">${safeText(orderData.poDate)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Buyer PO Ref:</strong></td><td style="padding:6px 0;">${safeText(orderData.buyerPoRef)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Order Type:</strong></td><td style="padding:6px 0;">${safeText(orderData.orderType)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Currency:</strong></td><td style="padding:6px 0;">${safeText(orderData.currency)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Incoterm:</strong></td><td style="padding:6px 0;">EXW</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Delivery:</strong></td><td style="padding:6px 0;">${safeText(orderData.deliveryMethod)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Destination Port:</strong></td><td style="padding:6px 0;">${safeText(orderData.destinationPort)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Client Confirmation Email:</strong></td><td style="padding:6px 0;">${safeText(orderData.orderEmail || orderData.signerEmail || orderData.clientEmail)}</td></tr>
-      </table>
+          <div style="background:#ffffff;padding:20px 36px 16px;border-bottom:1px solid #ece7dc;">
+            <img src="${LOGO_URL}" alt="Casadenza" style="display:block;width:250px;max-width:100%;height:auto;" />
+          </div>
 
-      <h3 style="margin:0 0 10px;">Shipping Details</h3>
-      <table style="border-collapse:collapse;margin-bottom:18px;width:100%;max-width:760px;">
-        <tr><td style="padding:6px 0;width:190px;"><strong>Company:</strong></td><td style="padding:6px 0;">${safeText(orderData.shipTo?.companyName)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Contact:</strong></td><td style="padding:6px 0;">${safeText(orderData.shipTo?.contactName)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Shipping Email:</strong></td><td style="padding:6px 0;">${safeText(orderData.shipTo?.email)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Phone:</strong></td><td style="padding:6px 0;">${safeText(orderData.shipTo?.phone)}</td></tr>
-        <tr>
-          <td style="padding:6px 0;"><strong>Address:</strong></td>
-          <td style="padding:6px 0;">
-            ${safeText(orderData.shipTo?.address1)} ${safeText(orderData.shipTo?.address2)}
-            ${safeText(orderData.shipTo?.city)} ${safeText(orderData.shipTo?.state)}
-            ${safeText(orderData.shipTo?.postal)} ${safeText(orderData.shipTo?.country)}
-          </td>
-        </tr>
-      </table>
+          <div style="background:#111111;color:#ffffff;padding:17px 36px;border-bottom:3px solid #c69c3a;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="width:46px;vertical-align:middle;">
+                  <div style="width:32px;height:32px;border:2px solid #c69c3a;border-radius:999px;text-align:center;line-height:30px;color:#c69c3a;font-size:18px;font-weight:bold;">!</div>
+                </td>
+                <td style="vertical-align:middle;">
+                  <div style="font-size:20px;line-height:1.2;font-weight:800;letter-spacing:.4px;text-transform:uppercase;">New Distributor Order Received</div>
+                  <div style="font-size:12px;line-height:1.45;color:#d9c38a;margin-top:4px;">Internal order notification for Casadenza Admin</div>
+                </td>
+              </tr>
+            </table>
+          </div>
 
-      <h3 style="margin:0 0 10px;">Order Items</h3>
-      <table style="border-collapse:collapse;width:100%;max-width:1100px;font-size:14px;">
-        <thead>
-          <tr style="background:#f3f3f3;">
-            <th style="padding:8px;border:1px solid #ddd;text-align:left;">#</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Collection</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:left;">SKU</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Product Name</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Size</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:left;">Unit</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Qty</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Unit Price</th>
-            <th style="padding:8px;border:1px solid #ddd;text-align:right;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsHtml || `<tr><td colspan="9" style="padding:8px;border:1px solid #ddd;">No items found.</td></tr>`}
-        </tbody>
-      </table>
+          <div style="padding:24px 36px 28px;">
+            <div style="font-size:16px;line-height:1.2;font-weight:800;text-transform:uppercase;margin:0 0 10px;color:#111;">Order Summary</div>
 
-      <table style="border-collapse:collapse;margin-top:18px;width:100%;max-width:420px;margin-left:auto;">
-        <tr><td style="padding:6px 0;"><strong>Items Total:</strong></td><td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.itemsTotal)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Freight:</strong></td><td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.freight)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Insurance:</strong></td><td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.insurance)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Discount:</strong></td><td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.discount)}</td></tr>
-        <tr><td style="padding:6px 0;"><strong>Other Charge:</strong></td><td style="padding:6px 0;text-align:right;">${safeText(orderData.currency)} ${formatMoney(orderData.otherCharge)}</td></tr>
-        <tr><td style="padding:10px 0;border-top:1px solid #ddd;"><strong>Grand Total:</strong></td><td style="padding:10px 0;border-top:1px solid #ddd;text-align:right;"><strong>${safeText(orderData.currency)} ${formatMoney(grandTotal)}</strong></td></tr>
-      </table>
+            <div style="border:1px solid #ded7c8;border-radius:6px;padding:12px 16px;margin:0 0 20px;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <tr>
+                  <td style="width:50%;vertical-align:top;padding-right:18px;border-right:1px solid #ded7c8;">
+                    <table style="width:100%;border-collapse:collapse;">
+                      <tr><td style="padding:6px 0;width:52%;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">PO Number</td><td style="padding:6px 0;font-weight:800;font-size:12px;line-height:1.25;">${safeText(orderData.poNumber)}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">PO Date</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.poDate)}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Buyer PO Reference</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.buyerPoRef) || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Order Type</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.orderType)}</td></tr>
+                    </table>
+                  </td>
 
-      ${orderData.notes ? `<p style="margin-top:18px;"><strong>Notes:</strong><br/>${safeText(orderData.notes)}</p>` : ""}
+                  <td style="width:50%;vertical-align:top;padding-left:24px;">
+                    <table style="width:100%;border-collapse:collapse;">
+                      <tr><td style="padding:6px 0;width:52%;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Incoterm</td><td style="padding:6px 0;font-weight:800;font-size:12px;line-height:1.25;">EXW</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Delivery Method</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.deliveryMethod)}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Destination Port</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.destinationPort) || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Currency</td><td style="padding:6px 0;font-weight:800;font-size:12px;line-height:1.25;">${currency}</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="font-size:16px;line-height:1.2;font-weight:800;text-transform:uppercase;margin:0 0 10px;color:#111;">Client & Shipping Details</div>
+
+            <div style="border:1px solid #ded7c8;border-radius:6px;padding:12px 16px;margin:0 0 22px;background:#fffdf8;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <tr>
+                  <td style="width:50%;vertical-align:top;padding-right:18px;border-right:1px solid #ded7c8;">
+                    <table style="width:100%;border-collapse:collapse;">
+                      <tr><td style="padding:6px 0;width:42%;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Company</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.shipTo?.companyName) || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Contact</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.shipTo?.contactName) || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Phone</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.shipTo?.phone) || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Shipping Email</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.shipTo?.email) || "—"}</td></tr>
+                    </table>
+                  </td>
+
+                  <td style="width:50%;vertical-align:top;padding-left:24px;">
+                    <table style="width:100%;border-collapse:collapse;">
+                      <tr><td style="padding:6px 0;width:42%;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Client Email</td><td style="padding:6px 0;font-weight:800;font-size:12px;line-height:1.25;">${clientEmail || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;">Signer Name</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.25;">${safeText(orderData.signerName) || "—"}</td></tr>
+                      <tr><td style="padding:6px 0;color:#333;text-transform:uppercase;font-size:10px;line-height:1.25;vertical-align:top;">Address</td><td style="padding:6px 0;font-weight:700;font-size:12px;line-height:1.4;">${shipAddress || "—"}</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="font-size:16px;line-height:1.2;font-weight:800;text-transform:uppercase;margin:0 0 10px;color:#111;">Order Items</div>
+
+            <table style="border-collapse:collapse;width:100%;font-size:11px;margin:0 0 8px;table-layout:auto;">
+              <thead>
+                <tr style="background:#111;color:#ffffff;">
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:center;font-size:10px;text-transform:uppercase;white-space:nowrap;">#</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:left;font-size:10px;text-transform:uppercase;">Collection</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:left;font-size:10px;text-transform:uppercase;white-space:nowrap;">SKU</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:left;font-size:10px;text-transform:uppercase;">Product Name</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:center;font-size:10px;text-transform:uppercase;white-space:nowrap;">Size</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:center;font-size:10px;text-transform:uppercase;white-space:nowrap;">Unit</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:center;font-size:10px;text-transform:uppercase;white-space:nowrap;">Qty</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:right;font-size:10px;text-transform:uppercase;white-space:nowrap;">Unit Price</th>
+                  <th style="padding:8px 6px;border:1px solid #333;text-align:right;font-size:10px;text-transform:uppercase;white-space:nowrap;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml || `<tr><td colspan="9" style="padding:10px;border:1px solid #e8e3d9;">No items found.</td></tr>`}
+              </tbody>
+            </table>
+
+            <table style="border-collapse:collapse;margin-top:8px;width:100%;max-width:390px;margin-left:auto;font-size:12px;border:1px solid #ded7c8;">
+              <tr><td style="padding:6px 20px;">Items Total</td><td style="padding:6px 20px;text-align:right;">${formatMoney(orderData.itemsTotal)}</td></tr>
+              <tr><td style="padding:6px 20px;">Freight</td><td style="padding:6px 20px;text-align:right;">${formatMoney(orderData.freight)}</td></tr>
+              <tr><td style="padding:6px 20px;">Insurance</td><td style="padding:6px 20px;text-align:right;">${formatMoney(orderData.insurance)}</td></tr>
+              <tr><td style="padding:6px 20px;">Discount</td><td style="padding:6px 20px;text-align:right;color:${discountValue > 0 ? "#d21d1d" : "#222"};">${discountValue > 0 ? "-" : ""}${formatMoney(discountValue)}</td></tr>
+              <tr><td style="padding:6px 20px;">Other Charge</td><td style="padding:6px 20px;text-align:right;">${formatMoney(orderData.otherCharge)}</td></tr>
+              <tr style="background:#f4efe5;"><td style="padding:10px 20px;border-top:1px solid #ded7c8;font-weight:800;text-transform:uppercase;">Grand Total</td><td style="padding:10px 20px;border-top:1px solid #ded7c8;text-align:right;font-weight:800;">${currency} ${formatMoney(grandTotal)}</td></tr>
+            </table>
+
+            <div style="border:1px solid #d2aa4a;background:#fffaf0;border-radius:6px;margin:24px 0 16px;padding:12px 16px;font-size:12px;line-height:1.55;color:#2b2b2b;">
+              <strong>ADMIN NOTE:</strong> Please review order details, product pricing, freight, discount, and shipping information before issuing the official Proforma Invoice.
+            </div>
+
+            ${orderData.notes ? `<p style="margin:0 0 14px;font-size:12px;line-height:1.55;color:#222;"><strong>Client Notes:</strong><br/>${safeText(orderData.notes)}</p>` : ""}
+
+            <div style="border-top:1px solid #d8c8a4;margin-top:16px;padding-top:14px;font-size:12px;line-height:1.5;color:#222;">
+              <strong>Casadenza Distributor Portal</strong><br/>
+              <span style="color:#777;">Automated internal order notification</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
