@@ -18,11 +18,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="min-h-screen bg-white lg:flex">
-      <div className="hidden lg:block"><AdminSideNav /></div>
+    <div className="min-h-screen bg-white xl:flex">
+      <div className="hidden xl:block"><AdminSideNav /></div>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <ResponsivePortalNav role="ADMIN"/><div className="hidden lg:block"><AdminTopBar supportEmail="info@casadenza.com" /></div>
+        <ResponsivePortalNav role="ADMIN"/><div className="hidden xl:block"><AdminTopBar supportEmail="info@casadenza.com" /></div>
 
         <main className="px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
           <div className="max-w-[1400px] mx-auto animate-in fade-in duration-700">

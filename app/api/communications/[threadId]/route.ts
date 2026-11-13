@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCommunicationActor, communicationScope, isSameOrigin, normalizeBody } from "@/lib/communication-access";
 import { notifyCommunicationMessage } from "@/lib/communication-mail";
-import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +45,10 @@ export async function POST(request: Request, { params }: Context) {
   const actor = await getCommunicationActor();
   if (!actor) return error("Unauthorized", 401);
   if (!isSameOrigin(request)) return error("Invalid request origin", 403);
-  if (!checkRateLimit("communications-reply:" + actor.userId, 30, 60_000).ok) return error("Too many messages", 429);
+  const messagesLastMinute = await prisma.communicationMessage.count({
+    where: { senderUserId: actor.userId, createdAt: { gte: new Date(Date.now() - 60_000) } },
+  });
+  if (messagesLastMinute >= 10) return error("Too many messages. Try again shortly.", 429);
   const data = await request.json().catch(() => null);
   const body = normalizeBody(data?.body);
   if (!body) return error("Message must be 1 to 10,000 characters");

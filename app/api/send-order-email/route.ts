@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { getCommunicationActor, isSameOrigin } from "@/lib/communication-access";
+import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -345,7 +347,24 @@ function buildClientEmailHtml(orderData: any, items: any[], grandTotal: number) 
 
 export async function POST(req: Request) {
   try {
+    const actor = await getCommunicationActor();
+    if (!actor) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    if (!isSameOrigin(req)) return NextResponse.json({ success: false, error: "Invalid origin" }, { status: 403 });
     const orderData = await req.json();
+    const orderId = String(orderData?.orderId || "");
+    if (!orderId) return NextResponse.json({ success: false, error: "Missing order ID" }, { status: 400 });
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, ...(actor.role === "DISTRIBUTOR" ? { distributorId: actor.distributorId! } : {}) },
+      select: { id: true, createdAt: true },
+    });
+    if (!order) return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 });
+    // This endpoint is only for a recently-created order. It is not a general-purpose mail sender.
+    if (Date.now() - order.createdAt.getTime() > 5 * 60 * 1000) {
+      return NextResponse.json({ success: false, error: "Order notification window expired" }, { status: 409 });
+    }
+    const itemCount = Array.isArray(orderData?.items) ? orderData.items.length : 0;
+    if (itemCount > 100) return NextResponse.json({ success: false, error: "Too many order items" }, { status: 400 });
+
 
     const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
     const smtpPort = Number(process.env.SMTP_PORT || 465);

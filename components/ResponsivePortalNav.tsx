@@ -27,7 +27,7 @@ export default function ResponsivePortalNav({ role }: { role: "ADMIN" | "DISTRIB
       ["Packing Calculator", "/dashboard/packing-calculator"],
     ];
   return (
-    <div className="lg:hidden">
+    <div className="xl:hidden">
       <div className="sticky top-0 z-40 flex h-[62px] items-center justify-between border-b border-[#EAE4D9] bg-[#FCFAF6] px-4">
         <Link href={root} className="flex items-center gap-3" onClick={() => setOpen(false)}>
           <img src="/brand/casadenza-logo.png" alt="Casadenza" className="h-7 w-auto max-w-[135px] object-contain"/>
