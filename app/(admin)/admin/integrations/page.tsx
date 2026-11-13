@@ -17,6 +17,7 @@ async function statusInfo() {
   let migrations = false;
   let linkedDistributors = 0;
   let zohoAuth = false;
+  let zohoIssue = "";
 
   try {
     await prisma.user.count();
@@ -33,10 +34,23 @@ async function statusInfo() {
       await getZohoAccessToken();
       zohoAuth = true;
     } catch (error) {
-      console.warn("Zoho OAuth validation unsuccessful", error instanceof Error ? error.name : "Unknown");
+      const code = error instanceof Error ? error.message : "ZOHO_AUTH_UNAVAILABLE";
+      // Only known, non-secret error classifications are displayed to admins.
+      const messages: Record<string, string> = {
+        ZOHO_AUTH_INVALID_CLIENT_SECRET: "Zoho rejected the Client Secret. Update ZOHO_CLIENT_SECRET using the same Self Client that generated the refresh token.",
+        ZOHO_AUTH_INVALID_CLIENT: "Zoho rejected the Client ID. Check the Self Client and the India data centre.",
+        ZOHO_AUTH_INVALID_REFRESH_TOKEN: "Zoho rejected the refresh token. Generate a new refresh token for the same Self Client.",
+        ZOHO_AUTH_INVALID_GRANT: "Zoho rejected this grant or refresh token. Verify the refresh token and client pairing.",
+        ZOHO_AUTH_INVALID_CODE: "An authorization code was saved instead of a refresh token. Generate a refresh token.",
+        ZOHO_AUTH_INVALID_SCOPE: "Zoho rejected the requested scopes. Generate the refresh token with CRM read and COQL read scopes.",
+        ZOHO_AUTH_ACCESS_DENIED: "Zoho denied this application's authorization. Review the Self Client permissions.",
+        ZOHO_AUTH_ORG_INACTIVE: "The connected Zoho organization is inactive.",
+      };
+      zohoIssue = messages[code] || "Zoho token exchange failed. Confirm Client ID, Client Secret, refresh token, and Zoho India endpoints.";
+      console.warn("Zoho OAuth validation unsuccessful", code.startsWith("ZOHO_AUTH_") ? code : "ZOHO_AUTH_UNAVAILABLE");
     }
   }
-  return { env, database, migrations, linkedDistributors, zohoAuth };
+  return { env, database, migrations, linkedDistributors, zohoAuth, zohoIssue };
 }
 
 function StatusCard({ title, good, details }: { title: string; good: boolean; details: string }) {
@@ -68,7 +82,7 @@ export default async function IntegrationStatusPage() {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <StatusCard title="Portal database" good={s.database} details="Checks that the existing database is reachable."/>
       <StatusCard title="New database migration" good={s.migrations} details="Checks whether the communication tables and Zoho account link are usable."/>
-      <StatusCard title="Zoho CRM OAuth" good={s.zohoAuth} details={s.env.zoho ? "Tests whether Zoho accepts the configured OAuth refresh credentials." : "Configure ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in Vercel."}/>
+      <StatusCard title="Zoho CRM OAuth" good={s.zohoAuth} details={!s.env.zoho ? "Configure ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in Vercel." : s.zohoIssue || "Zoho accepted the configured OAuth refresh credentials."}/>
       <StatusCard title="Cloudinary configuration" good={s.env.cloudinary} details="Environment variables must be set and the previously exposed API credential must be rotated separately."/>
       <StatusCard title="Email SMTP settings" good={s.env.smtp} details="Checks whether SMTP_USER and SMTP_PASS are set. Actual delivery must be tested before launch."/>
       <StatusCard title="Verified Zoho links" good={s.migrations && s.linkedDistributors > 0} details={s.migrations ? String(s.linkedDistributors) + " distributor accounts linked to Zoho." : "Run the new database migration before linking distributor accounts."}/>

@@ -3,7 +3,17 @@
  * Zoho CRM is the source of truth for distributor business records.
  * Server credentials must be configured as environment variables.
  */
-type ZohoTokenResponse = { access_token?: string; expires_in?: number };
+type ZohoTokenResponse = { access_token?: string; expires_in?: number; error?: string };
+const ALLOWED_OAUTH_ERRORS = new Set([
+  "invalid_client", "invalid_client_secret", "invalid_grant", "invalid_code",
+  "invalid_refresh_token", "invalid_scope", "access_denied", "org_inactive",
+]);
+function safeOAuthError(error: string | undefined): string {
+  if (typeof error === "string" && ALLOWED_OAUTH_ERRORS.has(error.toLowerCase())) {
+    return "ZOHO_AUTH_" + error.toUpperCase();
+  }
+  return "ZOHO_AUTH_UNAVAILABLE";
+}
 export function zohoConfigured() {
   return !!(process.env.ZOHO_REFRESH_TOKEN && process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET);
 }
@@ -28,9 +38,9 @@ export async function getZohoAccessToken(): Promise<string> {
         body: params,
         cache: "no-store",
       });
-      if (!res.ok) throw new Error("ZOHO_AUTH_UNAVAILABLE");
-      const data = (await res.json()) as ZohoTokenResponse;
-      if (!data.access_token) throw new Error("ZOHO_AUTH_UNAVAILABLE");
+      const data = (await res.json().catch(() => ({}))) as ZohoTokenResponse;
+      // Never print the response body or tokens; only allowlisted error codes reach the UI.
+      if (!res.ok || !data.access_token) throw new Error(safeOAuthError(data.error));
       const seconds = Math.max(120, Number(data.expires_in) || 3600);
       tokenCache = { token: data.access_token, expiresAt: Date.now() + Math.max(60, seconds - 90) * 1000 };
       return data.access_token;
