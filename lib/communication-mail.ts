@@ -29,6 +29,7 @@ export async function notifyCommunicationMessage(input: {
     ? input.distributorEmail
     : (process.env.ADMIN_ORDER_EMAIL || smtpUser);
   const enabled = process.env.VERCEL_ENV === "production" &&
+    process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS !== "false" &&
     validEmail(smtpUser) && !!smtpPass && validEmail(recipient);
 
   if (!enabled) {
@@ -38,7 +39,9 @@ export async function notifyCommunicationMessage(input: {
         notificationStatus: "SKIPPED",
         notificationError: process.env.VERCEL_ENV !== "production"
           ? "Preview notification disabled"
-          : "SMTP sender or recipient not configured",
+          : process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS === "false"
+            ? "Global inbox email notifications disabled"
+            : "SMTP sender or recipient not configured",
       },
     });
     return "SKIPPED";
