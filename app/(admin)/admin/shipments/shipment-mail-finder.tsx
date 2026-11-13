@@ -195,7 +195,7 @@ export default function ShipmentMailFinder({ orders }: { orders: Order[] }) {
       <label className="mt-4 flex items-start gap-2 text-[12px] leading-5 text-[#6F6251]">
         <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)}
           className="mt-1 h-4 w-4" />
-        I inspected the PDF and confirmed the shipment, invoice/PO reference and consignee match this distributor's order.
+        I inspected the PDF and confirmed the shipment, invoice/PO reference and consignee match this distributor&apos;s order.
       </label>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button disabled={!importEnabled || !chosen || !approved || busy} onClick={() => void attach()} className={btn}>
