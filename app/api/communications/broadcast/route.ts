@@ -17,6 +17,7 @@ function emailAvailable() {
   // No real distributor receives Preview test email.
   return process.env.VERCEL_ENV === "production" &&
     process.env.ENABLE_BROADCAST_EMAIL_NOTIFICATIONS === "true" &&
+    process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS !== "false" &&
     !!process.env.SMTP_USER && !!process.env.SMTP_PASS;
 }
 
@@ -30,15 +31,16 @@ export async function GET() {
   const count = await prisma.distributor.count({ where: { user: { role: "DISTRIBUTOR" } } });
   return NextResponse.json({
     ok: true, recipientCount: count, maxRecipients: MAX_RECIPIENTS,
+    emailDefaultEnabled: process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS !== "false",
     emailAvailable: emailAvailable() && count <= MAX_EMAIL_RECIPIENTS,
     maxEmailRecipients: MAX_EMAIL_RECIPIENTS,
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
 /**
- * One private portal thread per distributor. Email is explicitly selected, only
- * in production, and capped to protect SMTP timeouts. For larger audiences a
- * durable external queue is required before enabling bulk email.
+ * One private portal thread per distributor. In production, SMTP notice is
+ * automatic by default where the feature is enabled and recipient volume is
+ * within the verified limit. A durable queue is required for larger batches.
  * A failed SMTP request never removes the saved message.
  */
 export async function POST(request: Request) {
@@ -51,16 +53,15 @@ export async function POST(request: Request) {
   const body = normalizeBody(data?.body);
   const category = String(data?.category || "GENERAL").toUpperCase();
   const broadcastId = typeof data?.broadcastId === "string" ? data.broadcastId.trim() : "";
-  const deliverEmail = data?.delivery === "EMAIL_AND_PORTAL";
+  const automaticDelivery = data?.delivery === "AUTO";
+  const portalOnly = data?.delivery === "PORTAL_ONLY";
   if (!subject || !body || !CATEGORIES.includes(category)) return error("Valid subject, category and message required");
-  if (data?.confirmation !== "SEND TO ALL" || !["EMAIL_AND_PORTAL", "PORTAL_ONLY"].includes(data?.delivery)) {
-    return error("Explicit delivery selection and recipient confirmation required");
+  if (data?.confirmation !== "SEND TO ALL" || (!automaticDelivery && !portalOnly)) {
+    return error("Explicit recipient confirmation and supported delivery mode required");
   }
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(broadcastId)) {
     return error("Invalid broadcast request identifier");
   }
-  if (deliverEmail && !emailAvailable()) return error("Bulk email notifications are disabled until SMTP has been verified in production", 403);
-
   const distributors = await prisma.distributor.findMany({
     where: { user: { role: "DISTRIBUTOR" } },
     select: { id: true, email: true, user: { select: { email: true } } },
@@ -69,9 +70,9 @@ export async function POST(request: Request) {
   });
   if (distributors.length === 0) return error("No registered distributor accounts", 409);
   if (distributors.length > MAX_RECIPIENTS) return error("More than 200 distributors. Use a reviewed queued delivery workflow.", 413);
-  if (deliverEmail && distributors.length > MAX_EMAIL_RECIPIENTS) {
-    return error("Bulk email supports up to " + MAX_EMAIL_RECIPIENTS + " recipients pending queue integration. Choose portal-only delivery.", 413);
-  }
+  const deliverEmail = automaticDelivery && emailAvailable() && distributors.length <= MAX_EMAIL_RECIPIENTS;
+  // All recipients always get a private portal thread. If email is unavailable,
+  // or the group is too large for the bounded SMTP path, no email is sent.
   const ids = distributors.map(d => "bcast_" + broadcastId + "_" + d.id);
   const existing = await prisma.communicationThread.count({ where: { id: { in: ids } } });
   if (existing) return error("This broadcast was already recorded. Refresh your conversations.", 409);
