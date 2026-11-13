@@ -11,6 +11,7 @@ import {
   Clock,
   Files,
   Mail,
+  BarChart3,
   GraduationCap,
   Palette,
   Calculator,
@@ -20,6 +21,7 @@ import {
 
 const NAV = [
   { label: "Home", href: "/dashboard", icon: Home },
+  { label: "Business Overview", href: "/dashboard/business", icon: BarChart3 },
   { label: "Products", href: "/dashboard/products", icon: Layers },
   { label: "Price & Schemes", href: "/dashboard/price-schemes", icon: Zap },
   { label: "Place Order", href: "/dashboard/place-order", icon: PlusCircle },

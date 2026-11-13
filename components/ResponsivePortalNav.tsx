@@ -25,7 +25,7 @@ export default function ResponsivePortalNav({ role }: { role: "ADMIN" | "DISTRIB
       ["New Arrivals", "/admin/new-arrivals"], ["Packing Calculator", "/admin/packing-calculator"],
     ]
     : [
-      ["Home", "/dashboard"], ["Communication Centre", "/dashboard/communications"],
+      ["Home", "/dashboard"], ["Business Overview", "/dashboard/business"], ["Communication Centre", "/dashboard/communications"],
       ["Products", "/dashboard/products"], ["Price & Schemes", "/dashboard/price-schemes"],
       ["Place Order", "/dashboard/place-order"], ["My Orders", "/dashboard/my-orders"],
       ["New Arrivals", "/dashboard/new-arrivals"], ["Documents", "/dashboard/documents"],

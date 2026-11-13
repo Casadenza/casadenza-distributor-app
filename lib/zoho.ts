@@ -36,6 +36,7 @@ export async function zohoRequest(path: string, init?: RequestInit) {
     cache: "no-store",
     headers: { ...(init?.headers || {}), Authorization: "Zoho-oauthtoken " + token, "Content-Type": "application/json" },
   });
+  if (res.status === 204) return { data: [], info: { more_records: false } };
   if (!res.ok) throw new Error("ZOHO_CRM_UNAVAILABLE");
   return res.json();
 }

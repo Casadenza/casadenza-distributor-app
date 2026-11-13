@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Search, UserPlus, Edit2, X, Trash2 } from "lucide-react";
+import Link from "next/link";
 
 export default function DistributorsTable() {
   const [data, setData] = useState<any[]>([]);
@@ -129,7 +130,7 @@ export default function DistributorsTable() {
 
       {/* DISTRIBUTORS LIST TABLE */}
       <div className="bg-white border border-zinc-100 rounded-xl overflow-hidden shadow-sm">
-        <table className="w-full text-left border-collapse">
+        <div className="w-full overflow-x-auto"><table className="w-full min-w-[650px] text-left border-collapse">
           <thead>
             <tr className="bg-zinc-50/50 border-b border-zinc-100 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
               <th className="px-6 py-4 font-semibold">Identity</th>
@@ -156,14 +157,15 @@ export default function DistributorsTable() {
                   <div className="text-[10px] text-zinc-400 uppercase tracking-tighter">{d.defaultCurrency}</div>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button onClick={() => setEditing(d)} className="p-2 text-zinc-300 hover:text-zinc-950 transition-colors">
+                  <Link href={"/admin/distributors/" + d.id} className="mr-2 inline-flex min-h-[38px] items-center rounded-lg border border-[#E6DAC7] px-3 text-[12px] font-semibold text-[#806743] hover:bg-[#F7F0E4]">Zoho Sales</Link>
+                  <button onClick={() => setEditing(d)} className="inline-flex min-h-[38px] items-center p-2 text-zinc-500 hover:text-zinc-950 transition-colors">
                     <Edit2 size={16} />
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {/* EDIT/ADD MODAL */}

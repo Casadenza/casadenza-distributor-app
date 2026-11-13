@@ -4,6 +4,7 @@ import { getServerSession } from "@/lib/serverSession";
 import { prisma } from "@/lib/db";
 import DashboardAutoRefresh from "./dashboard-auto-refresh";
 import NewArrivalsAlert from "./new-arrivals-alert";
+import ZohoBusinessView from "@/components/ZohoBusinessView";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -289,6 +290,7 @@ export default async function SlimPremiumDashboard() {
   return (
     <div className="max-w-[1100px] mx-auto space-y-4 py-2 animate-in fade-in duration-1000">
       <DashboardAutoRefresh intervalMs={15000} />
+      <ZohoBusinessView url="/api/zoho/business" title="Your Zoho Sales" compact />
 
       <div className="flex items-center justify-between border-b border-[#F0EDE8] pb-4">
         <div>
