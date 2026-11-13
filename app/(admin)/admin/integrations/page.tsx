@@ -41,7 +41,7 @@ async function statusInfo() {
         ZOHO_AUTH_INVALID_CLIENT: "Zoho rejected the Client ID. Check the Self Client and the India data centre.",
         ZOHO_AUTH_INVALID_REFRESH_TOKEN: "Zoho rejected the refresh token. Generate a new refresh token for the same Self Client.",
         ZOHO_AUTH_INVALID_GRANT: "Zoho rejected this grant or refresh token. Verify the refresh token and client pairing.",
-        ZOHO_AUTH_INVALID_CODE: "An authorization code was saved instead of a refresh token. Generate a refresh token.",
+        ZOHO_AUTH_INVALID_CODE: "Zoho rejected the refresh token. It may be missing, invalid, revoked, or an authorization code may have been pasted. Verify a fresh refresh token.",
         ZOHO_AUTH_INVALID_SCOPE: "Zoho rejected the requested scopes. Generate the refresh token with CRM read and COQL read scopes.",
         ZOHO_AUTH_ACCESS_DENIED: "Zoho denied this application's authorization. Review the Self Client permissions.",
         ZOHO_AUTH_ORG_INACTIVE: "The connected Zoho organization is inactive.",
