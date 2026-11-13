@@ -116,10 +116,20 @@ export default function ShipmentMailFinder({ orders }: { orders: Order[] }) {
           </span>
         </div>)}
       </div>
-      {loaded && !mailboxes.some(m => m.configured) && <p className="mt-3 text-[12px] text-amber-800">
-        Read-only Gmail authorization must be configured separately in Vercel for these two accounts.
-        ChatGPT mailbox access is not shared with the portal.
-      </p>}
+      {loaded && !mailboxes.every(m => m.configured) && (
+        <div className="mt-3 rounded-xl border border-[#E8DCC9] bg-[#FFF9EF] p-4 text-[12px] leading-6 text-[#715D42]">
+          <p className="font-semibold">Connect both company mailboxes to enable search</p>
+          <p>ChatGPT Gmail connections cannot be reused here. Authorize each mailbox separately using Google OAuth read-only access, then set these server-only Vercel environment variables:</p>
+          <p className="my-2 break-all rounded-lg bg-white px-3 py-2 font-mono text-[11px]">
+            GMAIL_CLIENT_ID · GMAIL_CLIENT_SECRET · GMAIL_REFRESH_TOKEN_INFO · GMAIL_REFRESH_TOKEN_NEERAJ
+          </p>
+          <p>Use the Gmail API scope <code className="break-all">https://www.googleapis.com/auth/gmail.readonly</code>. Keep all refresh tokens and secrets out of chat and GitHub.</p>
+          <div className="mt-3 flex flex-wrap gap-4">
+            <a className="font-semibold underline underline-offset-2" href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>
+            <a className="font-semibold underline underline-offset-2" href="https://vercel.com/casadenzas-projects/casadenza-distributor-app/settings/environment-variables" target="_blank" rel="noopener noreferrer">Vercel environment settings</a>
+          </div>
+        </div>
+      )}
     </section>
 
     <section className="rounded-2xl border border-[#EAE2D4] bg-white p-4 sm:p-5">
