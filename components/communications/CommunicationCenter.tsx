@@ -19,7 +19,7 @@ type Message = {
   notificationStatus: string; sender: { displayName: string | null; email: string } | null;
 };
 type Detail = {
-  id: string; subject: string; category: string; status: string;
+  id: string; subject: string; category: string; status: string; createdAt: string;
   distributor: { id: string; name: string; country: string | null };
   order: { id: string; poNumber: string } | null; messages: Message[];
 };
