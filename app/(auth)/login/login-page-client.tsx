@@ -149,6 +149,9 @@ export default function LoginPageClient() {
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                 </button>
 
+                <div className="text-center">
+                  <a href="/forgot-password" className="text-[13px] font-semibold text-[#957349] underline-offset-4 hover:underline">Forgot your password?</a>
+                </div>
                 <div className="pt-1 text-center text-[12px] text-[#928B80]">
                   Secure distributor access for authorized users only.
                 </div>
