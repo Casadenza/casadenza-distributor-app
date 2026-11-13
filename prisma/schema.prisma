@@ -20,6 +20,7 @@ model User {
   forcePasswordReset Boolean @default(false)
 
   distributor Distributor?
+  communicationMessages CommunicationMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -48,6 +49,7 @@ model Distributor {
 
   tickets Ticket[]
   orders  Order[]
+  communicationThreads CommunicationThread[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -160,6 +162,7 @@ model Order {
 
   items     OrderItem[]
   documents OrderDocument[]
+  communicationThreads CommunicationThread[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -320,4 +323,42 @@ model MarketingAsset {
   @@index([type])
   @@index([category])
   @@index([isActive])
+}
+
+// -------------------- DISTRIBUTOR COMMUNICATIONS --------------------
+model CommunicationThread {
+  id            String      @id @default(cuid())
+  distributorId String
+  distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  orderId       String?
+  order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  subject       String
+  category      String      @default("GENERAL")
+  status        String      @default("OPEN")
+  messages      CommunicationMessage[]
+  lastMessageAt DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([distributorId, lastMessageAt])
+  @@index([orderId])
+}
+
+model CommunicationMessage {
+  id                  String              @id @default(cuid())
+  threadId            String
+  thread              CommunicationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderUserId        String?
+  sender              User?               @relation(fields: [senderUserId], references: [id], onDelete: SetNull)
+  senderRole          String
+  body                String
+  readByAdminAt       DateTime?
+  readByDistributorAt DateTime?
+  notificationStatus  String              @default("PENDING")
+  notificationSentAt  DateTime?
+  notificationError   String?
+  createdAt           DateTime            @default(now())
+
+  @@index([threadId, createdAt])
+  @@index([senderUserId])
 }
