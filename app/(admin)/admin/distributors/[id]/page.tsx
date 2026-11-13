@@ -34,7 +34,7 @@ export default async function AdminDistributorBusinessPage({ params }: { params:
         <ZohoBusinessView url={"/api/admin/distributors/" + encodeURIComponent(distributor.id) + "/zoho-business"} title="Zoho Sales & Activity" />
       ) : (
         <div className="rounded-xl border border-[#E6DDCF] bg-[#FAF7F0] p-5 text-[13px] text-[#827566]">
-          Link a verified Zoho Account to display the distributor's invoices, Pro Forma Invoices, quotes and contacts.
+          Link a verified Zoho Account to display the distributor&apos;s invoices, Pro Forma Invoices, quotes and contacts.
           No sales amount is estimated from portal orders.
         </div>
       )}
