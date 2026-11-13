@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, Check, CheckCheck, ChevronDown, Inbox, Mail,
-  MessageCircle, Plus, RefreshCw, Search, Send, ShieldCheck, X,
+  MessageCircle, Plus, RefreshCw, Search, Send, ShieldCheck, Users, X,
 } from "lucide-react";
 
 type Role = "ADMIN" | "DISTRIBUTOR";
@@ -52,6 +52,9 @@ export default function CommunicationCenter({ role }: { role: Role }) {
   const [distributors, setDistributors] = useState<Dist[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [newDistributorId, setNewDistributorId] = useState("");
+  const [recipientMode, setRecipientMode] = useState<"ONE" | "ALL">("ONE");
+  const [broadcastCount, setBroadcastCount] = useState<number | null>(null);
+  const [broadcastLimit, setBroadcastLimit] = useState(200);
   const [newOrderId, setNewOrderId] = useState("");
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("GENERAL");
@@ -100,12 +103,36 @@ export default function CommunicationCenter({ role }: { role: Role }) {
   }, [isAdmin]);
 
   useEffect(() => {
+    if (!isAdmin || view !== "compose") return;
+    let cancelled = false;
+    fetch("/api/communications/broadcast", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load recipient count");
+        return data;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setBroadcastCount(data.recipientCount);
+          setBroadcastLimit(data.maxRecipients);
+        }
+      })
+      .catch(() => { if (!cancelled) setBroadcastCount(null); });
+    return () => { cancelled = true; };
+  }, [isAdmin, view]);
+
+  useEffect(() => {
     if (view !== "compose") return;
+    if (isAdmin && recipientMode === "ALL") {
+      setOrders([]);
+      setNewOrderId("");
+      return;
+    }
     const distributorId = isAdmin ? newDistributorId : "";
     fetch("/api/communications/orders" + (distributorId ? "?distributorId=" + encodeURIComponent(distributorId) : ""), { cache: "no-store" })
       .then((r) => r.json()).then((d) => setOrders(d.items || [])).catch(() => setOrders([]));
     setNewOrderId("");
-  }, [isAdmin, newDistributorId, view]);
+  }, [isAdmin, newDistributorId, recipientMode, view]);
 
   function openThread(id: string) {
     setActiveId(id); setDetail(null); setView("detail"); setReply(""); setNotice("");
@@ -118,11 +145,39 @@ export default function CommunicationCenter({ role }: { role: Role }) {
   }
   function compose() {
     setView("compose"); setError(""); setNotice("");
-    setSubject(""); setBody(""); setCategory("GENERAL"); setNewOrderId("");
+    setSubject(""); setBody(""); setCategory("GENERAL"); setNewOrderId(""); setNewDistributorId(""); setRecipientMode("ONE");
   }
   async function sendNew() {
-    if (!subject.trim() || !body.trim() || (isAdmin && !newDistributorId)) {
+    if (busy) return;
+    const all = isAdmin && recipientMode === "ALL";
+    if (!subject.trim() || !body.trim() || (isAdmin && !all && !newDistributorId)) {
       setError("Please select a recipient and enter a subject and message."); return;
+    }
+    if (all) {
+      if (broadcastCount === null || broadcastCount < 1 || broadcastCount > broadcastLimit) {
+        setError("Recipient count unavailable or exceeds the broadcast limit."); return;
+      }
+      if (!window.confirm("Publish separate private portal messages for all " + broadcastCount +
+        " registered distributors?\\n\\nNo emails or document attachments will be sent. Replies remain private.")) return;
+      setBusy(true); setError(""); setNotice("");
+      try {
+        const res = await fetch("/api/communications/broadcast", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            broadcastId: window.crypto.randomUUID(),
+            subject, body, category, delivery: "PORTAL_ONLY", confirmation: "SEND TO ALL",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unable to publish broadcast");
+        setView("inbox");
+        setSubject(""); setBody("");
+        await loadList();
+        setNotice("Saved private portal messages for " + data.recipientCount +
+          " distributors. No email was sent. Each distributor sees only their own conversation.");
+      } catch (e: any) { setError(e?.message || "Unable to publish broadcast"); }
+      finally { setBusy(false); }
+      return;
     }
     setBusy(true); setError(""); setNotice("");
     try {
@@ -259,41 +314,72 @@ export default function CommunicationCenter({ role }: { role: Role }) {
               </div>
               <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
                 {isAdmin && (
-                  <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Distributor</span>
-                    <select className={controls} value={newDistributorId} onChange={(e) => setNewDistributorId(e.target.value)}>
-                      <option value="">Select a distributor</option>
-                      {distributors.map((d) => <option key={d.id} value={d.id}>{d.name}{d.country ? " — " + d.country : ""}</option>)}
-                    </select>
-                  </label>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Recipients</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setRecipientMode("ONE")}
+                          aria-pressed={recipientMode === "ONE"}
+                          className={"min-h-[44px] rounded-xl border px-3 text-[12px] font-semibold " +
+                            (recipientMode === "ONE" ? "border-[#C5A267] bg-[#FAF4E8] text-[#675028]" : "border-[#EAE5DB] bg-white text-[#777067]")}>
+                          One distributor
+                        </button>
+                        <button type="button" onClick={() => { setRecipientMode("ALL"); setNewOrderId(""); }}
+                          aria-pressed={recipientMode === "ALL"}
+                          className={"inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-3 text-[12px] font-semibold " +
+                            (recipientMode === "ALL" ? "border-[#C5A267] bg-[#FAF4E8] text-[#675028]" : "border-[#EAE5DB] bg-white text-[#777067]")}>
+                          <Users size={15}/> Send to all
+                        </button>
+                      </div>
+                    </div>
+                    {recipientMode === "ONE" ? (
+                      <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Distributor</span>
+                        <select className={controls} value={newDistributorId} onChange={(e) => setNewDistributorId(e.target.value)}>
+                          <option value="">Select a distributor</option>
+                          {distributors.map((d) => <option key={d.id} value={d.id}>{d.name}{d.country ? " — " + d.country : ""}</option>)}
+                        </select>
+                      </label>
+                    ) : (
+                      <div className="rounded-xl border border-[#E9E2D4] bg-[#FCF9F2] p-3 text-[12px] leading-5 text-[#736753]">
+                        <strong>{broadcastCount === null ? "Loading recipients…" : broadcastCount + " registered distributors"}</strong>
+                        <p className="mt-1">A private portal conversation is created for each distributor. Recipients cannot see each other. No bulk emails or documents will be sent.</p>
+                        {broadcastCount !== null && broadcastCount > broadcastLimit && <p className="mt-1 text-red-700">Broadcast limit of {broadcastLimit} recipients exceeded.</p>}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {!isAdmin && <div className="rounded-xl border border-[#E9E2D4] bg-[#FCF9F2] p-3 text-[13px]">To: <strong>Casadenza Team</strong></div>}
                 <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Subject</span>
                   <input className={controls} maxLength={160} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="What would you like to discuss?"/>
                 </label>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className={"grid grid-cols-1 gap-4 " + (isAdmin && recipientMode === "ALL" ? "" : "sm:grid-cols-2")}>
                   <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Category</span>
                     <select className={controls} value={category} onChange={(e) => setCategory(e.target.value)}>
                       {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
                   </label>
-                  <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Related order (optional)</span>
-                    <select className={controls} value={newOrderId} onChange={(e) => setNewOrderId(e.target.value)} disabled={isAdmin && !newDistributorId}>
-                      <option value="">No linked order</option>
-                      {orders.map((o) => <option value={o.id} key={o.id}>{o.label} — {o.status.replaceAll("_", " ")}</option>)}
-                    </select>
-                  </label>
+                  {!(isAdmin && recipientMode === "ALL") && (
+                    <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Related order (optional)</span>
+                      <select className={controls} value={newOrderId} onChange={(e) => setNewOrderId(e.target.value)} disabled={isAdmin && !newDistributorId}>
+                        <option value="">No linked order</option>
+                        {orders.map((o) => <option value={o.id} key={o.id}>{o.label} — {o.status.replaceAll("_", " ")}</option>)}
+                      </select>
+                    </label>
+                  )}
                 </div>
                 <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-[#625747]">Message</span>
                   <textarea className={controls + " min-h-[190px] resize-y"} value={body} maxLength={10000} onChange={(e) => setBody(e.target.value)} placeholder="Write your message…" />
                 </label>
                 <div className="rounded-xl bg-[#FAF7F0] p-3 text-[12px] leading-5 text-[#776F64]">
                   <ShieldCheck size={15} className="mr-1 inline text-[#9C825A]"/>
-                  The message will be saved in the portal. An email notification will be attempted using the configured sender. Replies must be made inside the portal.
+                  {isAdmin && recipientMode === "ALL"
+                    ? "Private portal messages only. No emails or attachments are sent. Each distributor can reply privately. You must confirm the full recipient count."
+                    : "The message will be saved in the portal. An email notification will be attempted using the configured sender. Replies must be made inside the portal."}
                 </div>
               </div>
               <div className="flex justify-end gap-2 border-t border-[#EEE9E0] px-4 py-3 sm:px-6">
                 <button onClick={goBack} className="min-h-[44px] rounded-xl border border-[#E9E2D6] px-4 text-[13px]">Cancel</button>
-                <button onClick={sendNew} disabled={busy || !subject.trim() || !body.trim() || (isAdmin && !newDistributorId)} className={goldButton}><Send size={15}/>{busy ? "Sending…" : "Send message"}</button>
+                <button onClick={sendNew} disabled={busy || !subject.trim() || !body.trim() || (isAdmin && recipientMode === "ONE" && !newDistributorId) || (isAdmin && recipientMode === "ALL" && (broadcastCount === null || broadcastCount < 1 || broadcastCount > broadcastLimit))} className={goldButton}><Send size={15}/>{busy ? "Saving…" : isAdmin && recipientMode === "ALL" ? "Publish to all (" + (broadcastCount ?? "…") + ")" : "Send message"}</button>
               </div>
             </div>
           ) : view === "detail" ? (
