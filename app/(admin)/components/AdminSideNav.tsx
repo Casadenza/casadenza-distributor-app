@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Package, Zap, Users, Clock, 
   Files, GraduationCap, Palette, LifeBuoy, 
-  Calculator, Sparkles, ChevronRight, Mail 
+  Calculator, Sparkles, ChevronRight, Mail, Settings2 
 } from "lucide-react";
 
 const NAV = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "Integrations", href: "/admin/integrations", icon: Settings2 },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Price & Schemes", href: "/admin/prices", icon: Zap },
   { label: "Distributors", href: "/admin/distributors", icon: Users },

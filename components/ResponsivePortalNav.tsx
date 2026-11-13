@@ -18,7 +18,7 @@ export default function ResponsivePortalNav({ role }: { role: "ADMIN" | "DISTRIB
   const root = role === "ADMIN" ? "/admin" : "/dashboard";
   const nav = role === "ADMIN"
     ? [
-      ["Dashboard", "/admin"], ["Distributors", "/admin/distributors"],
+      ["Dashboard", "/admin"], ["Integrations", "/admin/integrations"], ["Distributors", "/admin/distributors"],
       ["Orders Hub", "/admin/orders"], ["Communication Centre", "/admin/communications"],
       ["Products", "/admin/products"], ["Prices", "/admin/prices"],
       ["Documents", "/admin/documents"], ["Marketing Toolkit", "/admin/marketing-toolkit"],
