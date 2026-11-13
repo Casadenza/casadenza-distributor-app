@@ -3,11 +3,13 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "@/lib/serverSession";
 import { getZohoAccessToken, zohoConfigured } from "@/lib/zoho";
+import { gmailMailboxStatus } from "@/lib/shipment-mail";
 import { CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 async function statusInfo() {
+  const gmailMailboxes = gmailMailboxStatus();
   const env = {
     zoho: zohoConfigured(),
     cloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
@@ -50,7 +52,7 @@ async function statusInfo() {
       console.warn("Zoho OAuth validation unsuccessful", code.startsWith("ZOHO_AUTH_") ? code : "ZOHO_AUTH_UNAVAILABLE");
     }
   }
-  return { env, database, migrations, linkedDistributors, zohoAuth, zohoIssue };
+  return { env, database, migrations, linkedDistributors, zohoAuth, zohoIssue, gmailMailboxes };
 }
 
 function StatusCard({ title, good, details }: { title: string; good: boolean; details: string }) {
@@ -85,6 +87,12 @@ export default async function IntegrationStatusPage() {
       <StatusCard title="Zoho CRM OAuth" good={s.zohoAuth} details={!s.env.zoho ? "Configure ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in Vercel." : s.zohoIssue || "Zoho accepted the configured OAuth refresh credentials."}/>
       <StatusCard title="Cloudinary configuration" good={s.env.cloudinary} details="Environment variables must be set and the previously exposed API credential must be rotated separately."/>
       <StatusCard title="Email SMTP settings" good={s.env.smtp} details="Checks whether SMTP_USER and SMTP_PASS are set. Actual delivery must be tested before launch."/>
+      <StatusCard title="Gmail shipment search — info@" good={!!s.gmailMailboxes.find(m => m.mailbox === "info")?.configured}
+        details="Read-only Gmail access for info@casadenza.com. Requires Google OAuth setup; configuration presence does not prove authorization."/>
+      <StatusCard title="Gmail shipment search — neeraj@" good={!!s.gmailMailboxes.find(m => m.mailbox === "neeraj")?.configured}
+        details="Read-only Gmail access for neeraj@casadenza.com. Configure OAuth separately, without sharing passwords."/>
+      <StatusCard title="Broadcast email notices" good={process.env.VERCEL_ENV === "production" && process.env.ENABLE_BROADCAST_EMAIL_NOTIFICATIONS === "true" && s.env.smtp}
+        details="Optional email inbox notifications are disabled in Preview. Enable only after SMTP delivery and recipient isolation tests."/>
       <StatusCard title="Verified Zoho links" good={s.migrations && s.linkedDistributors > 0} details={s.migrations ? String(s.linkedDistributors) + " distributor accounts linked to Zoho." : "Run the new database migration before linking distributor accounts."}/>
     </div>
     <section className="rounded-2xl border border-[#E9E0D1] bg-[#FAF7F0] p-4 sm:p-5">
