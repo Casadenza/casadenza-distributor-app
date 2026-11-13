@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Package, Zap, Users, Clock, 
   Files, GraduationCap, Palette, LifeBuoy, 
-  Calculator, Sparkles, ChevronRight 
+  Calculator, Sparkles, ChevronRight, Mail 
 } from "lucide-react";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { label: "Price & Schemes", href: "/admin/prices", icon: Zap },
   { label: "Distributors", href: "/admin/distributors", icon: Users },
   { label: "Orders Hub", href: "/admin/orders", icon: Clock },
+  { label: "Messages", href: "/admin/communications", icon: Mail },
   { label: "Documents", href: "/admin/documents", icon: Files },
   { label: "Training Hub", href: "/admin/training", icon: GraduationCap },
   { label: "Marketing Tool", href: "/admin/marketing-toolkit", icon: Palette },
