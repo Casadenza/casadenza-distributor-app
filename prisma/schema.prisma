@@ -160,6 +160,10 @@ model Order {
   status String  @default("RECEIVED")
   eta    String?
   notes  String?
+  emailNotificationState String @default("NOT_SENT")
+  emailNotificationRequestedAt DateTime?
+  emailNotificationAdminSentAt DateTime?
+  emailNotificationDistributorSentAt DateTime?
 
   items     OrderItem[]
   documents OrderDocument[]
