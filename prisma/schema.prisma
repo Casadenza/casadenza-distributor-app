@@ -37,6 +37,7 @@ model Distributor {
   defaultCurrency String  @default("INR")
   phone           String?
   email           String?
+  zohoAccountId   String? @unique
 
   // Billing
   billingName    String?
