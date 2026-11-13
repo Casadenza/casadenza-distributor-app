@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Package, Zap, Users, Clock, 
   Files, GraduationCap, Palette, LifeBuoy, 
-  Calculator, Sparkles, ChevronRight, Mail, Settings2 
+  Calculator, Sparkles, ChevronRight, Mail, Settings2, Plane 
 } from "lucide-react";
 
 const NAV = [
@@ -17,6 +17,7 @@ const NAV = [
   { label: "Orders Hub", href: "/admin/orders", icon: Clock },
   { label: "Messages", href: "/admin/communications", icon: Mail },
   { label: "Documents", href: "/admin/documents", icon: Files },
+  { label: "Shipment Finder", href: "/admin/shipments", icon: Plane },
   { label: "Training Hub", href: "/admin/training", icon: GraduationCap },
   { label: "Marketing Tool", href: "/admin/marketing-toolkit", icon: Palette },
   { label: "New Arrivals", href: "/admin/new-arrivals", icon: Sparkles },
