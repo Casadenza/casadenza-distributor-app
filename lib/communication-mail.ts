@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 
 function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;/g, "&#39;");
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\x27/g, "&#39;");
 }
 function validEmail(value: string | null | undefined) {
   return !!value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
