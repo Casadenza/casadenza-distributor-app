@@ -9,6 +9,12 @@ export default function ResponsivePortalNav({ role }: { role: "ADMIN" | "DISTRIB
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
   const root = role === "ADMIN" ? "/admin" : "/dashboard";
   const nav = role === "ADMIN"
     ? [

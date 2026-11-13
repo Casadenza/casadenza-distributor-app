@@ -206,7 +206,7 @@ export default function CommunicationCenter({ role }: { role: Role }) {
         ))}
       </div>
 
-      <div className="flex min-h-[560px] overflow-hidden rounded-[20px] border border-[#E8E2D7] bg-white shadow-sm lg:min-h-[680px]">
+      <div className="flex h-[calc(100dvh-290px)] min-h-[480px] max-h-[860px] overflow-hidden rounded-[20px] border border-[#E8E2D7] bg-white shadow-sm sm:h-[calc(100dvh-270px)]">
         {/* Master list on desktop/tablet, separate view on small screens */}
         <section className={"w-full flex-none border-r border-[#EEE9E0] bg-[#FEFDFB] md:w-[300px] lg:w-[365px] " + (view !== "inbox" ? "hidden md:flex" : "flex") + " flex-col"} aria-label="Conversation list">
           <div className="border-b border-[#EEE9E0] p-3 sm:p-4">
@@ -252,7 +252,7 @@ export default function CommunicationCenter({ role }: { role: Role }) {
 
         <section className={"min-w-0 flex-1 flex-col " + (view === "inbox" ? "hidden md:flex" : "flex")} aria-label="Conversation details">
           {view === "compose" ? (
-            <div className="flex h-full min-h-[560px] flex-col">
+            <div className="flex h-full min-h-0 flex-col">
               <div className="flex items-center gap-3 border-b border-[#EEE9E0] px-4 py-4 sm:px-6">
                 <button aria-label="Back to conversations" onClick={goBack} className="rounded-lg p-2 hover:bg-[#F6F2EB]"><ArrowLeft size={18}/></button>
                 <div><h2 className="text-[18px] font-semibold">New message</h2><p className="text-[12px] text-[#8B8175]">Send a message through the partner portal</p></div>
@@ -298,7 +298,7 @@ export default function CommunicationCenter({ role }: { role: Role }) {
             </div>
           ) : view === "detail" ? (
             detail ? (
-              <div className="flex h-full min-h-[560px] flex-col">
+              <div className="flex h-full min-h-0 flex-col">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EEE9E0] px-3 py-3 sm:px-5">
                   <div className="flex min-w-0 items-center gap-2">
                     <button aria-label="Back to conversations" onClick={goBack} className="rounded-lg p-2 hover:bg-[#F6F2EB] md:hidden"><ArrowLeft size={18}/></button>
@@ -345,9 +345,9 @@ export default function CommunicationCenter({ role }: { role: Role }) {
                   </div>
                 </div>
               </div>
-            ) : <div className="flex min-h-[560px] items-center justify-center text-[13px] text-[#8B8175]">Loading conversation…</div>
+            ) : <div className="flex h-full min-h-0 items-center justify-center text-[13px] text-[#8B8175]">Loading conversation…</div>
           ) : (
-            <div className="hidden h-full min-h-[560px] flex-col items-center justify-center gap-3 p-8 text-center md:flex">
+            <div className="hidden h-full min-h-0 flex-col items-center justify-center gap-3 p-8 text-center md:flex">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F7F1E7]"><Mail size={29} className="text-[#B18C4F]"/></div>
               <h3 className="font-serif text-[24px] text-[#24201D]">Stay connected</h3>
               <p className="max-w-[300px] text-[13px] leading-6 text-[#888073]">Choose a conversation or compose a message to your {isAdmin ? "distributor" : "Casadenza team"}.</p>
