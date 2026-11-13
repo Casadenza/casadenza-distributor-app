@@ -51,7 +51,7 @@ export default function ZohoBusinessView({url,title="Zoho Business Overview",com
      error ? <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-[13px] text-amber-900">{error}. No sales totals will be displayed.</p> :
      data && <>
        {!compact && <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[#F8F5EE] p-4"><Building2 size={19} className="text-[#AF8E58]"/><strong>{data.account.name}</strong><span className="text-[11px] text-[#857C6D]">Retrieved {new Date(data.syncedAt).toLocaleString()}</span></div>}
-       {!data.invoicesComplete && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[12px] text-amber-900">Invoice history exceeds the retrieval limit. Figures are incomplete and must not be used as totals.</p>}
+       {!data.invoicesComplete && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[12px] text-amber-900">Zoho invoice totals are unavailable. This dashboard will not show incomplete financial figures.</p>}
        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
          {data.totals.length===0?<p className="rounded-xl bg-[#F8F5EE] p-4 text-[13px]">No invoices linked to this account.</p>:
          data.totals.map(t=><div key={t.currency} className="rounded-2xl border border-[#E9E2D8] bg-white p-4">
@@ -61,15 +61,15 @@ export default function ZohoBusinessView({url,title="Zoho Business Overview",com
          </div>)}
        </div>
        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-         {[["Invoices",data.invoices.length],["Pro Forma Invoices",data.proformas.length],["Quotes",data.quotes.length],["Contacts",data.contacts.length]].map(x=>
+         {[["Invoices in Zoho",data.totals.reduce((sum,t)=>sum+t.invoiceCount,0)],["Pro Forma shown",data.proformas.length],["Quotes shown",data.quotes.length],["Contacts shown",data.contacts.length]].map(x=>
            <div key={x[0]} className="rounded-xl border border-[#E9E2D8] bg-white p-3"><p className="text-[24px] font-semibold">{x[1]}</p><p className="text-[12px] text-[#857C6D]">{x[0]}</p></div>)}
        </div>
        {!compact && <>
          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
-           <RecordList title="Invoices" items={data.invoices}/>
-           <RecordList title="Pro Forma Invoices" items={data.proformas}/>
-           <RecordList title="Quotes" items={data.quotes}/>
-           <RecordList title="Deals" items={data.deals}/>
+           <RecordList title="Recent Invoices" items={data.invoices}/>
+           <RecordList title="Recent Pro Forma Invoices" items={data.proformas}/>
+           <RecordList title="Recent Quotes" items={data.quotes}/>
+           <RecordList title="Recent Deals" items={data.deals}/>
          </div>
          <section className="rounded-xl border border-[#E9E2D8] bg-white p-4">
            <h3 className="font-serif text-[21px]">Zoho Contacts</h3>
@@ -78,7 +78,7 @@ export default function ZohoBusinessView({url,title="Zoho Business Overview",com
            </div>
          </section>
        </>}
-       <p className="text-[11px] leading-5 text-[#81776C]">Figures use Zoho CRM Invoices, excluding cancelled/void records. Amounts are not payments collected or downstream distributor retail sales. Currencies remain separate. {data.invoicesOmittedByStatus>0?String(data.invoicesOmittedByStatus)+" cancelled/void invoices excluded.":""}</p>
+       <p className="text-[11px] leading-5 text-[#81776C]">Figures use Zoho CRM Invoices, excluding cancelled/void records. Amounts are not payments collected or downstream distributor retail sales. Currencies remain separate. {data.invoicesOmittedByStatus>0?String(data.invoicesOmittedByStatus)+" cancelled/void invoices excluded from the recent list.":""}</p>
      </>}
   </section>;
 }
