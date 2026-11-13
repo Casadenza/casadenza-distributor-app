@@ -18,7 +18,9 @@ function formatMoney(value: unknown) {
 
 function safeText(value: unknown) {
   if (value === null || value === undefined) return "";
-  return String(value);
+  return String(value)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function isValidEmail(value: unknown) {
