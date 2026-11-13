@@ -91,15 +91,22 @@ export default async function IntegrationStatusPage() {
         details="Read-only Gmail access for info@casadenza.com. Requires Google OAuth setup; configuration presence does not prove authorization."/>
       <StatusCard title="Gmail shipment search — neeraj@" good={!!s.gmailMailboxes.find(m => m.mailbox === "neeraj")?.configured}
         details="Read-only Gmail access for neeraj@casadenza.com. Configure OAuth separately, without sharing passwords."/>
-      <StatusCard title="Broadcast email notices" good={process.env.VERCEL_ENV === "production" && process.env.ENABLE_BROADCAST_EMAIL_NOTIFICATIONS === "true" && s.env.smtp}
-        details="Optional email inbox notifications are disabled in Preview. Enable only after SMTP delivery and recipient isolation tests."/>
+      <StatusCard title="Inbox email alerts — default setting" good={process.env.VERCEL_ENV === "production" && s.env.smtp && process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS !== "false"}
+        details={process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS === "false"
+          ? "System-wide default OFF. Set CASADENZA_INBOX_EMAIL_NOTIFICATIONS=true in Vercel to restore it."
+          : process.env.VERCEL_ENV !== "production"
+          ? "System-wide default ON for every new message and reply. Preview never sends real emails; Production requires tested SMTP."
+          : "Default ON: each new message and reply attempts an email. SMTP acceptance is not proof of inbox delivery."}/>
+      <StatusCard title="Send to All — automatic email notifications"
+        good={process.env.VERCEL_ENV === "production" && process.env.ENABLE_BROADCAST_EMAIL_NOTIFICATIONS === "true" && process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS !== "false" && s.env.smtp}
+        details="Uses the same default notification behavior. Limited to 15 recipients until a durable email queue is implemented. Requires verified SMTP and production activation; Preview is portal-only."/>
       <StatusCard title="Verified Zoho links" good={s.migrations && s.linkedDistributors > 0} details={s.migrations ? String(s.linkedDistributors) + " distributor accounts linked to Zoho." : "Run the new database migration before linking distributor accounts."}/>
     </div>
     <section className="rounded-2xl border border-[#E9E0D1] bg-[#FAF7F0] p-4 sm:p-5">
       <div className="flex items-center gap-2"><ShieldCheck size={20} className="text-[#A78652]"/><h2 className="text-[17px] font-semibold">Production release conditions</h2></div>
       <p className="mt-2 text-[13px] leading-6 text-[#796D5E]">
         A passing build is not proof that integrations are configured. Before production: rotate the exposed Cloudinary secret, back up and migrate the database,
-        verify Zoho Account mappings, test admin/distributor access and run real SMTP delivery checks.
+        verify Zoho Account mappings, test admin/distributor access and run real SMTP delivery checks. App-wide inbox alerts default ON; admins can disable them with CASADENZA_INBOX_EMAIL_NOTIFICATIONS=false in Vercel.
       </p>
       <Link href="/admin/distributors" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#24211D] px-4 text-[13px] font-semibold text-white">
         Manage distributor links <ArrowRight size={16}/>
