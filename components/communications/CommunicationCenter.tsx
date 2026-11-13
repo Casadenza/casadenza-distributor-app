@@ -55,6 +55,9 @@ export default function CommunicationCenter({ role }: { role: Role }) {
   const [recipientMode, setRecipientMode] = useState<"ONE" | "ALL">("ONE");
   const [broadcastCount, setBroadcastCount] = useState<number | null>(null);
   const [broadcastLimit, setBroadcastLimit] = useState(200);
+  const [broadcastEmailLimit, setBroadcastEmailLimit] = useState(15);
+  const [broadcastEmailAvailable, setBroadcastEmailAvailable] = useState(false);
+  const [emailRequested, setEmailRequested] = useState(false);
   const [newOrderId, setNewOrderId] = useState("");
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("GENERAL");
@@ -115,6 +118,9 @@ export default function CommunicationCenter({ role }: { role: Role }) {
         if (!cancelled) {
           setBroadcastCount(data.recipientCount);
           setBroadcastLimit(data.maxRecipients);
+          setBroadcastEmailLimit(data.maxEmailRecipients || 15);
+          setBroadcastEmailAvailable(!!data.emailAvailable);
+          setEmailRequested(!!data.emailAvailable);
         }
       })
       .catch(() => { if (!cancelled) setBroadcastCount(null); });
@@ -157,15 +163,18 @@ export default function CommunicationCenter({ role }: { role: Role }) {
       if (broadcastCount === null || broadcastCount < 1 || broadcastCount > broadcastLimit) {
         setError("Recipient count unavailable or exceeds the broadcast limit."); return;
       }
+      const sendEmail = emailRequested && broadcastEmailAvailable && broadcastCount <= broadcastEmailLimit;
       if (!window.confirm("Publish separate private portal messages for all " + broadcastCount +
-        " registered distributors?\\n\\nNo emails or document attachments will be sent. Replies remain private.")) return;
+        " registered distributors?\\n\\n" +
+        (sendEmail ? "Also submit one email inbox notification per distributor." : "No emails will be sent.") +
+        "\\nReplies remain private; no documents are attached.")) return;
       setBusy(true); setError(""); setNotice("");
       try {
         const res = await fetch("/api/communications/broadcast", {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({
             broadcastId: window.crypto.randomUUID(),
-            subject, body, category, delivery: "PORTAL_ONLY", confirmation: "SEND TO ALL",
+            subject, body, category, delivery: sendEmail ? "EMAIL_AND_PORTAL" : "PORTAL_ONLY", confirmation: "SEND TO ALL",
           }),
         });
         const data = await res.json();
@@ -173,8 +182,11 @@ export default function CommunicationCenter({ role }: { role: Role }) {
         setView("inbox");
         setSubject(""); setBody("");
         await loadList();
-        setNotice("Saved private portal messages for " + data.recipientCount +
-          " distributors. No email was sent. Each distributor sees only their own conversation.");
+        setNotice("Saved " + data.recipientCount + " private portal messages. " +
+          (data.delivery === "EMAIL_AND_PORTAL"
+            ? data.smtpAccepted + " email notification(s) accepted by SMTP; " + data.smtpFailed + " not submitted. Final inbox delivery is not guaranteed."
+            : "No emails sent.") +
+          " Replies stay private.");
       } catch (e: any) { setError(e?.message || "Unable to publish broadcast"); }
       finally { setBusy(false); }
       return;
@@ -189,7 +201,7 @@ export default function CommunicationCenter({ role }: { role: Role }) {
       if (!res.ok) throw new Error(d.error || "Unable to send");
       openThread(d.id);
       setNotice(d.notificationStatus === "SENT"
-        ? "Message saved. An email notification was sent."
+        ? "Message saved. Email notification accepted by SMTP."
         : "Message saved in the portal. Email notification was not delivered; the recipient can still read it here.");
     } catch (e: any) { setError(e.message || "Unable to send"); }
     finally { setBusy(false); }
@@ -206,7 +218,7 @@ export default function CommunicationCenter({ role }: { role: Role }) {
       if (!res.ok) throw new Error(d.error || "Unable to send reply");
       setReply("");
       await loadDetail(activeId);
-      setNotice(d.notificationStatus === "SENT" ? "Reply saved and notification sent."
+      setNotice(d.notificationStatus === "SENT" ? "Reply saved. Notification accepted by SMTP."
         : "Reply saved in the portal. Email notification was not delivered.");
     } catch (e: any) { setError(e.message || "Unable to send reply"); }
     finally { setBusy(false); }
@@ -342,7 +354,18 @@ export default function CommunicationCenter({ role }: { role: Role }) {
                     ) : (
                       <div className="rounded-xl border border-[#E9E2D4] bg-[#FCF9F2] p-3 text-[12px] leading-5 text-[#736753]">
                         <strong>{broadcastCount === null ? "Loading recipients…" : broadcastCount + " registered distributors"}</strong>
-                        <p className="mt-1">A private portal conversation is created for each distributor. Recipients cannot see each other. No bulk emails or documents will be sent.</p>
+                        <p className="mt-1">A private portal conversation is created for each distributor. Recipients cannot see each other, and no documents are attached.</p>
+        <label className="mt-3 flex items-start gap-2">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={emailRequested && broadcastEmailAvailable}
+            onChange={(e) => setEmailRequested(e.target.checked)}
+            disabled={!broadcastEmailAvailable || (broadcastCount !== null && broadcastCount > broadcastEmailLimit)} />
+          <span><strong>Notify each distributor by email</strong><br/>
+            A short email with a secure inbox link, without message contents or attachments.
+            {!broadcastEmailAvailable && " Unavailable in Preview; requires verified production SMTP and explicit activation."}
+            {broadcastEmailAvailable && broadcastCount !== null && broadcastCount > broadcastEmailLimit &&
+              " Available for up to " + broadcastEmailLimit + " recipients; larger batches need a durable queue."}
+          </span>
+        </label>
                         {broadcastCount !== null && broadcastCount > broadcastLimit && <p className="mt-1 text-red-700">Broadcast limit of {broadcastLimit} recipients exceeded.</p>}
                       </div>
                     )}
@@ -373,7 +396,9 @@ export default function CommunicationCenter({ role }: { role: Role }) {
                 <div className="rounded-xl bg-[#FAF7F0] p-3 text-[12px] leading-5 text-[#776F64]">
                   <ShieldCheck size={15} className="mr-1 inline text-[#9C825A]"/>
                   {isAdmin && recipientMode === "ALL"
-                    ? "Private portal messages only. No emails or attachments are sent. Each distributor can reply privately. You must confirm the full recipient count."
+                    ? "Separate private portal messages for each distributor. " +
+                      (emailRequested && broadcastEmailAvailable ? "An email inbox notice will also be attempted." : "No email will be sent.") +
+                      " Each distributor can reply privately. You must confirm the full recipient count."
                     : "The message will be saved in the portal. An email notification will be attempted using the configured sender. Replies must be made inside the portal."}
                 </div>
               </div>
@@ -413,7 +438,7 @@ export default function CommunicationCenter({ role }: { role: Role }) {
                           <p className="whitespace-pre-wrap break-words text-[14px] leading-6">{message.body}</p>
                           {mine && <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-white/60">
                             {message.notificationStatus === "SENT" ? <CheckCheck size={13}/> : <Check size={13}/>}
-                            {message.notificationStatus === "SENT" ? "Email notified" : message.notificationStatus === "PENDING" ? "Notification pending" : "Saved in portal"}
+                            {message.notificationStatus === "SENT" ? "SMTP accepted" : message.notificationStatus === "PENDING" ? "Notification pending" : "Saved in portal"}
                           </div>}
                         </div>
                       </div>
