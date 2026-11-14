@@ -234,7 +234,7 @@ function decodeInlineText(part: MailPart | undefined, depth=0): string {
   if (part.mimeType==="text/plain" && part.body?.data) {
     try {
       return Buffer.from(part.body.data,"base64url").toString("utf8")
-        .replace(/[\\u0000-\\u001f]/g," ").replace(/\\s+/g," ").slice(0,2200);
+        .replace(/\s+/g," ").slice(0,2200);
     }catch{return "";}
   }
   for (const child of part.parts||[]) {
