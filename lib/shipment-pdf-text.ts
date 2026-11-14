@@ -1,5 +1,5 @@
 import "server-only";
-import pdfParse from "pdf-parse";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 export type PdfTextResult={text:string;status:"EXTRACTED"|"EMPTY"|"TOO_LARGE"|"INVALID"};
 const MAX_BYTES=2*1024*1024;
