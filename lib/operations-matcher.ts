@@ -8,7 +8,7 @@ export type OperationsOrder = {
 export type OperationsCandidate = {
   id: string; mailbox: ShipmentMailbox; messageId: string; partId: string | null;
   filename: string | null; subject: string; from: string; date: string; snippet: string;
-  kind: "PURCHASE_ORDER" | "INVOICE" | "AWB_HAWB" | "PACKING_LIST" | "OTHER";
+  kind: "PURCHASE_ORDER" | "INVOICE" | "PROFORMA_INVOICE" | "SHIPPING_BILL" | "AWB_HAWB" | "PACKING_LIST" | "OTHER";
   state: "POSSIBLE_ORDER_MATCH" | "NEEDS_REVIEW" | "MULTIPLE_MATCHES";
   suggestedOrderId: string | null;
   suggestedDistributorId: string | null;
