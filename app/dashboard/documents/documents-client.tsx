@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import OrderFolderControls from "@/components/documents/order-folder-controls";
+import DocumentReadinessIndicator from "@/components/documents/document-readiness";
 import OrderFolderTabs from "@/components/documents/order-folder-tabs";
 import {filterFolderOrders,INITIAL_FOLDER_FILTERS,documentFolder,orderCurrency,orderValue,type FolderFilters,type FolderKind} from "@/lib/order-document-folders";
 import {
@@ -453,6 +454,7 @@ export default function DocumentsClient({
                             colSpan={5}
                             className="border-b border-slate-200 px-8 py-6"
                           >
+                            <DocumentReadinessIndicator order={o}/>
                             <OrderFolderTabs documents={docs} selected={folderByOrder[o.id]||"ALL"} onSelect={folder=>setFolderByOrder(prev=>({...prev,[o.id]:folder}))}/>
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
                               {visibleDocs.length > 0 ? (
