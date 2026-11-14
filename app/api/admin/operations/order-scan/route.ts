@@ -68,8 +68,9 @@ export async function POST(request: Request) {
       } catch {pdfsEmpty++;}
     }));
   }
-  const candidates=deriveOperationsCandidates(messages,[details])
-    .filter(c=>c.suggestedOrderId===details.id);
+  const candidates=deriveOperationsCandidates(messages,[details]);
+  // Keep ambiguous/unmatched shipment candidates for admin review, not silent loss.
+  // No candidate is linked to a customer-visible order here.
   const rows=candidates.map(c=>({
     mailbox:c.mailbox,messageId:c.messageId,partId:c.partId||"body",
     filename:c.filename,sender:c.from,subject:c.subject,snippet:c.snippet,
@@ -81,7 +82,8 @@ export async function POST(request: Request) {
   const issues=results.filter(r=>r.status==="rejected").length;
   return NextResponse.json({ok:issues===0,orderId:details.id,searchTerms:distinct.length,
     messagesInspected:messages.length,pdfsParsed,pdfsEmpty,
-    matchedCandidates:candidates.length,added:added.count,
+    matchedCandidates:candidates.filter(c=>c.suggestedOrderId===details.id).length,
+    unresolvedCandidates:candidates.filter(c=>!c.suggestedOrderId).length,added:added.count,
     failures:issues,reviewRequired:true,sharingEnabled:false}, {status:issues===results.length?503:200,
       headers:{"Cache-Control":"private, no-store"}});
 }
