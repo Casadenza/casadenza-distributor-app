@@ -8,6 +8,7 @@ type Policy = {
   pointsPer100CurrencyAboveThreshold: number;
   usdCentsPerPoint: number;
   maxOrderDiscountPercent: number;
+  maxRedemptionPoints: number;
   activity: Activity;
   milestones: { amount: number; bonus: number }[];
   sampleShippingPaidByDistributor: boolean;
