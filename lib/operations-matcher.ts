@@ -24,9 +24,9 @@ function emailOf(s: string) {
   return m ? m[0].toLowerCase() : "";
 }
 function termInText(term: string, text: string, minimum=6) {
-  const needle = normalized(term);
-  if(needle.length < minimum) return false;
-  return normalized(text).includes(needle);
+  const needle=canonicalText(term).replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+  const hay=" "+canonicalText(text).replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim()+" ";
+  return normalized(term).length>=minimum && hay.includes(" "+needle+" ");
 }
 function quantities(s: string): number[] {
   const result: number[] = [];
@@ -58,8 +58,10 @@ const irrelevantFile=/\b(catalogue|catalog|brochure|newsletter|marketing|portfol
 const orderSignal=/\b(new order|purchase order|customer order|order confirmation|please (?:place|process|book) (?:an? )?order|order placed|(?:we|i) (?:would like|want|wish) to order|please (?:supply|send|dispatch) \d+\s*(?:sheets?|panels?))\b/i;
 const shippingSignal=/\b(invoice|proforma|packing list|shipping bill|waybill|hawb|mawb|awb|tracking|shipment|dispatch|consignee|bill of lading)\b/i;
 function refMatch(ref: string, text: string) {
-  const n=normalized(ref);
-  return n.length>=7 && normalized(text).includes(n);
+  const chars=normalized(ref).split("");
+  if(chars.length<7||chars.length>60)return false;
+  const pattern="(^|[^a-z0-9])"+chars.join("[\\s./_-]*")+"(?=$|[^a-z0-9])";
+  return new RegExp(pattern,"i").test(text);
 }
 function scoreOrder(
   o: OperationsOrder, m: IntakeMessage,
@@ -126,9 +128,14 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
         .filter(x=>x.score>0&&x.enough).sort((a,b)=>b.score-a.score);
       const best=rankings[0];
       const second=rankings[1];
+      // An email thread may mention multiple order numbers. Never assume its
+      // attachment belongs to the highest-scoring one without document review.
+      const refOwners=orders.filter(o=>
+        [o.poNumber,o.invoiceNumber,o.buyerPoRef].some(ref=>refMatch(ref,descriptive+" "+p.text)));
+      const mixedReferences=refOwners.length>1;
       const tie=!!best&&!!second&&best.score-second.score<20;
       const newOrder=orderMail && p.partId===null && !best?.reference;
-      const conflict=!!best?.conflicts.length;
+      const conflict=!!best?.conflicts.length || mixedReferences;
       // Do not associate a new customer order with an older portal order by name alone.
       const supportedTextMatch=!!best && best.evidence.includes("Customer name") &&
         best.evidence.includes("Sheet quantity") && best.evidence.includes("PDF text inspected");
@@ -137,7 +144,7 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
       const state=tie?"MULTIPLE_MATCHES":suggested?"POSSIBLE_ORDER_MATCH":"NEEDS_REVIEW";
       // Candidate review is still useful even when the best match is not conclusive.
       const reason=tie?"Two or more orders have similar evidence; manual verification required.":
-        conflict?"Conflicting document data: "+best!.conflicts.join("; "):
+        conflict?"Conflicting document data: "+(mixedReferences?"Multiple order references; ":"")+(best?.conflicts||[]).join("; "):
         newOrder?"Potential new customer order; create a draft only after verifying order lines.":
         suggested?"Proposed only: "+best!.evidence.join(", ")+". Document is not shared.":
         "Potential order/shipment document without enough independent evidence.";
@@ -148,7 +155,7 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
         suggestedDistributorId:suggested?.distributorId||(newOrder?best?.order.distributorId:null)||null,
         suggestedDistributorName:suggested?.distributorName||null,
         reason,confidence:Math.max(0,Math.min(100,best?.score||0)),
-        evidence:best?.evidence||[],conflicts:best?.conflicts||[],
+        evidence:best?.evidence||[],conflicts:[...(best?.conflicts||[]),...(mixedReferences?["Multiple order references in the same email/document"]:[])],
       });
     }
   }
