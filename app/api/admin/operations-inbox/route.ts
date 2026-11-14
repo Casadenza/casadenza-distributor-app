@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "@/lib/serverSession";
-import { gmailMailboxStatus, scanRecentMailbox, searchShipmentMailbox, type IntakeMessage, type ShipmentMailbox } from "@/lib/shipment-mail";
+import { gmailMailboxStatus, scanRecentMailbox, searchOperationsMailbox, type ShipmentMailbox } from "@/lib/shipment-mail";
 import { deriveOperationsCandidates, type OperationsOrder } from "@/lib/operations-matcher";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
@@ -35,11 +35,7 @@ export async function GET(request: Request) {
     }),
     Promise.allSettled(configured.map(async mailbox => {
       if (!ref) return scanRecentMailbox(mailbox.mailbox as ShipmentMailbox);
-      const results=await searchShipmentMailbox(mailbox.mailbox as ShipmentMailbox,ref);
-      return results.map(m=>({
-        mailbox:m.mailbox,messageId:m.messageId,subject:m.subject,from:m.from,
-        date:m.date,snippet:"",pdfs:m.attachments,
-      } satisfies IntakeMessage));
+      return searchOperationsMailbox(mailbox.mailbox as ShipmentMailbox,ref);
     })),
   ]);
   const options:OperationsOrder[]=orders.map(o=>{
