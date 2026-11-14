@@ -31,8 +31,9 @@ export function documentReadiness(order:Pick<FolderOrder,"status"|"notes"|"docum
    phase==="PRE_SHIPMENT"?["PI"]:["INVOICE","PACKING"];
  const missing=baseline.filter(k=>!present.includes(k));
  const transport=String(notes.shipmentMode||notes.transportMode||notes.shippingMode||"").trim().toUpperCase();
- const suggested:FolderKind[]=active ? (/(AIR|COURIER|EXPRESS)/.test(transport)?["AIR"]:
-   /(SEA|OCEAN|VESSEL)/.test(transport)?["SEA"]:["AIR","SEA"]).filter(k=>!present.includes(k)) as FolderKind[] : [];
+ const transportCandidates:FolderKind[]=/(AIR|COURIER|EXPRESS)/.test(transport)?["AIR"]:
+   /(SEA|OCEAN|VESSEL)/.test(transport)?["SEA"]:["AIR","SEA"];
+ const suggested:FolderKind[]=active?transportCandidates.filter(k=>!present.includes(k)):[];
  // Only show suggested documents, never imply every mode requires both AIR and SEA.
  const note=phase==="ORDER"?"Order received; expected documents depend on the next workflow stage.":
    phase==="CLOSED"?"Order closed or cancelled; no new documents expected.":
