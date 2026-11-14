@@ -9,6 +9,8 @@ on:
       - 'app/api/admin/operations/**'
       - 'tests/operations-matcher.test.mjs'
       - 'tests/order-document-folders.test.mjs'
+      - 'tests/document-readiness.test.mjs'
+      - 'lib/order-document-completeness.ts'
       - 'lib/order-document-folders.ts'
       - 'components/documents/**'
       - 'app/(admin)/admin/documents/**'
@@ -35,6 +37,7 @@ jobs:
       - run: npx prisma generate
       - run: npm run test:order-matcher
       - run: node --experimental-strip-types --test tests/order-document-folders.test.mjs
+      - run: node --experimental-strip-types --test tests/document-readiness.test.mjs
       - run: npx tsc --noEmit
       - run: npm run lint -- --no-cache
       - name: Full Next.js preview build without production credentials
