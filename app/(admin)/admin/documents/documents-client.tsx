@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import OrderFolderControls from "@/components/documents/order-folder-controls";
 import DocumentReadinessIndicator from "@/components/documents/document-readiness";
+import {documentReadiness,missingDocumentCount} from "@/lib/order-document-completeness";
 import OrderFolderTabs from "@/components/documents/order-folder-tabs";
 import {filterFolderOrders,INITIAL_FOLDER_FILTERS,documentFolder,orderValue,orderCurrency,type FolderFilters,type FolderKind} from "@/lib/order-document-folders";
 import {
@@ -92,6 +93,7 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
 
   const [q, setQ] = useState("");
   const [folderFilters,setFolderFilters]=useState<FolderFilters>(INITIAL_FOLDER_FILTERS);
+  const [missingOnly,setMissingOnly]=useState(false);
   const [folderByOrder,setFolderByOrder]=useState<Record<string,"ALL"|FolderKind>>({});
   const [docTypeFilter, setDocTypeFilter] = useState("ALL");
 
@@ -110,6 +112,7 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
 
   const filtered = useMemo(() => {
     return filterFolderOrders(orders,folderFilters).filter((o) => {
+      if(missingOnly && documentReadiness(o).state!=="INCOMPLETE")return false;
       const meta = safeParseNotes(o.notes) || {};
       const po = meta?.poNumber ? `PO-${meta.poNumber}` : `ORD-${String(o.id).slice(-6)}`;
       const distributorName =
@@ -124,7 +127,7 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
       }
       return true;
     });
-  }, [orders, q, docTypeFilter, folderFilters]);
+  }, [orders, q, docTypeFilter, folderFilters,missingOnly]);
 
   async function refreshOrder(orderId: string) {
     // Optional endpoint (Step 3 me banega) — if not present, fallback to reload
@@ -256,6 +259,10 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
       </div>
 
       <div className="px-4 py-3"><OrderFolderControls filters={folderFilters} setFilters={setFolderFilters} orders={orders} admin={true}/></div>
+      <div className="mx-4 my-2 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <span><strong>{missingDocumentCount(orders)}</strong> orders have outstanding baseline documents (based on their current workflow status).</span>
+        <label className="inline-flex items-center gap-2"><input type="checkbox" checked={missingOnly} onChange={e=>setMissingOnly(e.target.checked)}/>Show incomplete only</label>
+      </div>
       {/* Table Head */}
       <div className="bg-[#FBF9F6] border-b border-[#EEEAE2] grid grid-cols-[1.4fr_1.2fr_0.9fr_0.9fr_40px] px-6 py-2 sticky top-[65px] z-30">
         <div className={labelCls}>Order Detail</div>
