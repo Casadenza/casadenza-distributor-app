@@ -306,3 +306,50 @@ export async function searchOperationsMailbox(mailbox: ShipmentMailbox, referenc
   }));
   return messages.filter((m): m is IntakeMessage => m !== null);
 }
+
+/** Read-only forwarding-agent updates for a specific existing order.
+ * Matches explicit order/booking/invoice references; never promotes an update
+ * to customer-visible shipment data automatically.
+ */
+export type ForwarderMailReport={messageId:string;subject:string;from:string;date:string;body:string;filenames:string[]};
+export async function searchOrangestarReports(mailbox:ShipmentMailbox,references:string[]):Promise<ForwarderMailReport[]>{
+ const refs=[...new Set(references.map(s=>s.trim()).filter(s=>s.length>=4&&s.length<=80))].slice(0,4);
+ if(!refs.length)return [];
+ const token=await getAccessToken(mailbox);
+ const lists=await Promise.allSettled(refs.map(async ref=>{
+   const safe=ref.replace(/[\r\n"\\]/g," ");
+   const q='-in:trash -in:spam from:(orangestar.co.in) "'+safe+'"';
+   const result=await gmailGet<ListResponse>(token,"messages?"+new URLSearchParams({q,maxResults:"20"}));
+   return result.messages||[];
+ }));
+ const ids=[...new Set(lists.flatMap(x=>x.status==="fulfilled"?x.value.map(z=>z.id):[]))]
+   .filter(validMessageId).slice(0,45);
+ const details=await Promise.all(ids.map(async id=>{
+  try{
+   const data=await gmailGet<GmailMessage>(token,"messages/"+encodeURIComponent(id)+"?format=full");
+   const h=data.payload?.headers||[];
+   const header=(name:string)=>h.find(x=>x.name.toLowerCase()===name)?.value||"";
+   const from=header("from").slice(0,240);
+   // Verify the actual From domain before treating as an Orangestar candidate.
+   if(!/@orangestar\.co\.in\b/i.test(from))return null;
+   const bodyPart=(part:MailPart|undefined,depth=0):string=>{
+    if(!part||depth>5)return "";
+    if(part.mimeType==="text/plain"&&part.body?.data)try{
+      return Buffer.from(part.body.data,"base64url").toString("utf8").slice(0,15000);
+    }catch{return "";}
+    for(const child of part.parts||[]){
+      const value=bodyPart(child,depth+1);if(value)return value;
+    }
+    return "";
+   };
+   const body=bodyPart(data.payload)||data.snippet||"";
+   const filenames=collectPdfParts(data.payload).map(x=>x.filename);
+   const searchText=header("subject")+" "+body+" "+filenames.join(" ");
+   const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,"");
+   if(!refs.some(ref=>normalize(searchText).includes(normalize(ref))))return null;
+   return {messageId:id,subject:header("subject").slice(0,300),from,
+     date:header("date").slice(0,120),body:body.slice(0,9000),filenames};
+  }catch{return null;}
+ }));
+ return details.filter((x):x is ForwarderMailReport=>x!==null);
+}
