@@ -9,7 +9,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
  const [editing,setEditing]=useState(false);
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState("");
- const [reports,setReports]=useState<Array<{messageId:string;date:string;subject:string;proposed:{agent:string;etd:string;eta:string;vessel:string;container:string;status:string;booking:string;invoiceRef:string;transportMode:string}}>>([]);
+ const [reports,setReports]=useState<Array<{messageId:string;date:string;subject:string;proposed:{agent:string;etd:string;eta:string;etdLocation:string;etaLocation:string;finalDestination:string;vessel:string;container:string;status:string;booking:string;invoiceRef:string;transportMode:string}}>>([]);
  const [scanning,setScanning]=useState(false);
  const link=carrierTrackingLink(details.carrier,details.trackingNumber);
  async function findOrangestar(){
@@ -23,7 +23,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
   }catch(e){setMessage(e instanceof Error?e.message:"Unable to search");}
   finally{setScanning(false);}
  }
- function applyReport(report:{agent:string;etd:string;eta:string;vessel:string;container:string;status:string}){
+ function applyReport(report:{agent:string;etd:string;eta:string;etdLocation:string;etaLocation:string;vessel:string;container:string;status:string}){
   // Report dates may be formatted as DD-MON-YY; convert strictly before
   // presenting them as editable YYYY-MM-DD form dates.
   function iso(v:string){
@@ -37,6 +37,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
   }
   setDetails(previous=>({...previous,agent:report.agent||previous.agent,
     etd:iso(report.etd)||previous.etd,eta:iso(report.eta)||previous.eta,
+    etdLocation:report.etdLocation||previous.etdLocation,etaLocation:report.etaLocation||previous.etaLocation,
     vessel:report.vessel||previous.vessel,containerNumber:report.container||previous.containerNumber,
     status:report.status||previous.status}));
   setEditing(true);
@@ -92,7 +93,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
     {reports.map(r=><div key={r.messageId} className="rounded border bg-white px-3 py-2 text-xs space-y-1">
        <p className="font-semibold">{r.subject}</p>
        <p className="text-stone-500">{r.date} · Booking {r.proposed.booking||"Not extracted"} · Invoice {r.proposed.invoiceRef||"Not extracted"}</p>
-       <p>ETD {r.proposed.etd||"Not stated"} · ETA {r.proposed.eta||"Not stated"} · {r.proposed.status}</p>
+       <p>ETD {r.proposed.etd||"Not stated"} {r.proposed.etdLocation||""} · ETA {r.proposed.eta||"Not stated"} {r.proposed.etaLocation||""} · {r.proposed.status}</p>
        <button className="rounded border px-2 py-1" onClick={()=>applyReport(r.proposed)}>Copy proposed details for verification</button>
      </div>)}
   </div>}
