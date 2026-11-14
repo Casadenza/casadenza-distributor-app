@@ -330,3 +330,48 @@ model GmailMailboxConnection {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
+
+
+model OperationsInboxItem {
+  id                       String   @id @default(cuid())
+  mailbox                  String
+  messageId                String
+  partId                   String
+  filename                 String?
+  sender                   String
+  subject                  String
+  snippet                  String?
+  receivedAt               DateTime?
+  kind                     String
+  matchState               String   @default("NEEDS_REVIEW")
+  reviewStatus             String   @default("PENDING")
+  suggestedOrderId         String?
+  suggestedDistributorId   String?
+  matchReason              String
+  attachedOrderId          String?
+  attachedDocumentId       String?
+  reviewedBy               String?
+  reviewedAt               DateTime?
+  firstSeenAt              DateTime @default(now())
+  lastSeenAt               DateTime @updatedAt
+
+  @@unique([mailbox, messageId, partId])
+  @@index([reviewStatus, receivedAt])
+  @@index([suggestedDistributorId, reviewStatus])
+  @@index([receivedAt])
+}
+
+model OperationsInboxScanRun {
+  id              String   @id @default(cuid())
+  scheduledSlot   String   @unique
+  status          String   @default("RUNNING")
+  infoStatus      String   @default("PENDING")
+  alexStatus      String   @default("PENDING")
+  messagesScanned Int      @default(0)
+  itemsAdded      Int      @default(0)
+  errorSummary    String?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([startedAt])
+}
