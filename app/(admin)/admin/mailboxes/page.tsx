@@ -21,12 +21,11 @@ export default async function MailboxesPage({ searchParams }: { searchParams?: {
     databaseReady = false;
   }
   const labels = {
-    info: "info@casadenza.com", alex: "alex@casadenza.in",
+    info: "info@casadenza.com",
   } as const;
   const result = String(searchParams?.result || "");
   const messages: Record<string, string> = {
     info_connected: "info@casadenza.com connected successfully.",
-    alex_connected: "alex@casadenza.in connected successfully.",
     invalid_state: "Authorization could not be validated. Please retry.",
     expired_state: "Authorization expired. Please retry.",
     permission_denied: "Google access was not approved.",
@@ -40,7 +39,7 @@ export default async function MailboxesPage({ searchParams }: { searchParams?: {
       <Link href="/admin/communications" className="text-sm text-neutral-500 hover:text-neutral-900">← Communications</Link>
       <div>
         <h1 className="text-3xl font-semibold text-neutral-900">Gmail connections</h1>
-        <p className="mt-2 text-sm text-neutral-600">Connect both accounts separately for automatic read-only order and shipment scanning. No emails are sent or deleted.</p>
+        <p className="mt-2 text-sm text-neutral-600">Connect info@casadenza.com for automatic read-only order and shipment scanning. No emails are sent or deleted.</p>
       </div>
       {result && <p role="status" className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">{messages[result] || "Connection status updated."}</p>}
       {!ready && <div className="rounded-xl border border-amber-300 p-4 text-sm text-amber-900">Google OAuth setup is incomplete. An administrator must configure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_TOKEN_ENCRYPTION_KEY in Vercel.</div>}
