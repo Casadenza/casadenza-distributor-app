@@ -55,7 +55,7 @@ export function classifyDocument(filename: string, subject: string, extractedTex
   return "OTHER";
 }
 const irrelevantFile=/\b(catalogue|catalog|brochure|newsletter|marketing|portfolio|presentation|resume|curriculum vitae|advertisement|bank statement|tax receipt|quotation template)\b/i;
-const orderSignal=/\b(new order|purchase order|customer order|order confirmation|please (?:place|process|book) (?:an? )?order|order placed)\b/i;
+const orderSignal=/\b(new order|purchase order|customer order|order confirmation|please (?:place|process|book) (?:an? )?order|order placed|(?:we|i) (?:would like|want|wish) to order|please (?:supply|send|dispatch) \d+\s*(?:sheets?|panels?))\b/i;
 const shippingSignal=/\b(invoice|proforma|packing list|shipping bill|waybill|hawb|mawb|awb|tracking|shipment|dispatch|consignee|bill of lading)\b/i;
 function refMatch(ref: string, text: string) {
   const n=normalized(ref);
@@ -77,7 +77,9 @@ function scoreOrder(
   const qty=Number(o.quantity||0);
   const found=quantities(context);
   const quantity=qty>0 && found.includes(qty);
-  const otherQuantity=qty>0 && found.length>0 && !quantity;
+  const inDocument=quantities(extractedText);
+  const otherQuantity=qty>0 && ((inDocument.length>0 && !inDocument.includes(qty)) ||
+    (inDocument.length===0 && found.length>0 && !quantity));
   const extractedBuyer=extractedText.match(/(?:buyer|consignee|bill to)\s*[:\-]\s*([^\r\n]{4,100})/i);
   const buyer=extractedBuyer?.[1] || "";
   const knownNames=[o.distributorName,o.billingName||""].filter(x=>normalized(x).length>=6);
