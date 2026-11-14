@@ -54,9 +54,22 @@ export async function POST(request: Request) {
       buffer: pdf.buffer, folder: "casadenza/documents/" + orderId,
       publicId: randomUUID(), resourceType: "raw", filename: cleanName,
     });
-    const document = await prisma.orderDocument.create({
-      data: { orderId, title, url: uploaded.secureUrl },
-      select: { id: true, title: true, orderId: true },
+    const document = await prisma.$transaction(async tx => {
+      const doc = await tx.orderDocument.create({
+        data: { orderId, title, url: uploaded.secureUrl },
+        select: { id: true, title: true, orderId: true },
+      });
+      // Mark only the exact Gmail attachment as handled, never other messages.
+      // The scan tables exist only once the scheduled intake feature is activated.
+      if (process.env.AUTO_INBOX_SCAN_ENABLED === "true") {
+        await tx.operationsInboxItem.updateMany({
+          where: { mailbox, messageId, partId, reviewStatus: "PENDING" },
+          data: { reviewStatus: "ATTACHED", attachedOrderId: orderId,
+            attachedDocumentId: doc.id, reviewedBy: session.userId,
+            reviewedAt: new Date() },
+        });
+      }
+      return doc;
     });
     return NextResponse.json({
       ok: true, document, distributorId,
