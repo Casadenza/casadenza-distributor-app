@@ -14,12 +14,12 @@ The Admin Send to All option creates a private conversation for each distributor
 
 1. Enable Gmail API in a Casadenza-owned Google Cloud project.
 2. Configure OAuth consent with the minimum Gmail scope: https://www.googleapis.com/auth/gmail.readonly. This is a Google-restricted scope and may require production OAuth verification/security review.
-3. Create a secure OAuth client and use an approved offline authorization flow for EACH of info@casadenza.com and neeraj@casadenza.com. Generate refresh tokens with offline access; each token must represent the corresponding mailbox.
+3. Create a secure OAuth client and use an approved offline authorization flow for EACH of info@casadenza.com and alex@casadenza.in. Generate refresh tokens with offline access; each token must represent the corresponding mailbox.
 4. Store five server-side settings privately in the Vercel dashboard, as applicable:
    GMAIL_CLIENT_ID
    GMAIL_CLIENT_SECRET
    GMAIL_REFRESH_TOKEN_INFO
-   GMAIL_REFRESH_TOKEN_NEERAJ
+   GMAIL_REFRESH_TOKEN_ALEX
 5. Redeploy Preview and check Admin > Integrations and Admin > Shipment Finder. Configuration presence alone does not verify actual Gmail permission; search a known invoice and preview a known AWB/HAWB PDF to verify.
 6. The server validates Gmail users/me/profile email identity for each configured mailbox; a mismatch is refused.
 
