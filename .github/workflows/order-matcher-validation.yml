@@ -8,6 +8,11 @@ on:
       - 'app/(admin)/admin/operations/**'
       - 'app/api/admin/operations/**'
       - 'tests/operations-matcher.test.mjs'
+      - 'tests/order-document-folders.test.mjs'
+      - 'lib/order-document-folders.ts'
+      - 'components/documents/**'
+      - 'app/(admin)/admin/documents/**'
+      - 'app/dashboard/documents/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/order-matcher-validation.yml'
@@ -29,6 +34,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npx prisma generate
       - run: npm run test:order-matcher
+      - run: node --experimental-strip-types --test tests/order-document-folders.test.mjs
       - run: npx tsc --noEmit
       - run: npm run lint -- --no-cache
       - name: Full Next.js preview build without production credentials
