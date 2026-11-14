@@ -5,10 +5,10 @@ export default function OrderFolderTabs({documents,selected,onSelect}:{documents
  const choices=[{id:"ALL",label:"All files",count:documents.length},
    ...FOLDER_TYPES.map(f=>({id:f.id,label:f.label,count:documents.filter(d=>documentFolder(d)===f.id).length}))];
  return <div aria-label="Order document subfolders" className="flex flex-wrap gap-2 border-b border-stone-200 bg-stone-50 px-3 py-3">
-  {choices.filter(c=>c.id==="ALL"||c.count>0).map(f=><button type="button" key={f.id}
+  {choices.map(f=><button type="button" key={f.id}
     onClick={()=>onSelect(f.id as "ALL"|FolderKind)}
     className={"rounded-lg border px-3 py-2 text-[11px] font-medium "+(selected===f.id?"border-stone-900 bg-stone-900 text-white":"border-stone-200 bg-white text-stone-700")}>
-    {f.id==="ALL"?"▣ ":"▱ "}{f.label} <span className="opacity-70">({f.count})</span>
+    {f.id==="ALL"?"▣ ":"▱ "}{f.label} <span className="opacity-70">{f.count>0?"("+f.count+")":"· Pending"}</span>
   </button>)}
  </div>;
 }
