@@ -22,6 +22,7 @@ export default async function Page() {
     include: {
       distributor: true, // if relation exists
       documents: true,
+      items: {select:{qty:true,unitPrice:true}},
     },
     orderBy: { createdAt: "desc" },
     take: 800,
