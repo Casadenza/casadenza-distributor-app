@@ -306,7 +306,7 @@ export default function DocumentsClient({
               <div className="h-8 w-1 rounded-full bg-indigo-600" />
               <div>
                 <h1 className="text-lg font-bold tracking-tight text-slate-900">
-                  Document Management
+                  Order Documents
                 </h1>
                 <p className="mt-0.5 text-[11px] text-slate-500">
                   Distributor documents and order files
