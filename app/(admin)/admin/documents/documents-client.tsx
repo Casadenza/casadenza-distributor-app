@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import OrderFolderControls from "@/components/documents/order-folder-controls";
+import OrderFolderTabs from "@/components/documents/order-folder-tabs";
+import {filterFolderOrders,INITIAL_FOLDER_FILTERS,documentFolder,orderValue,orderCurrency,type FolderFilters,type FolderKind} from "@/lib/order-document-folders";
 import {
   Search,
   RefreshCw,
@@ -86,6 +89,8 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const [q, setQ] = useState("");
+  const [folderFilters,setFolderFilters]=useState<FolderFilters>(INITIAL_FOLDER_FILTERS);
+  const [folderByOrder,setFolderByOrder]=useState<Record<string,"ALL"|FolderKind>>({});
   const [docTypeFilter, setDocTypeFilter] = useState("ALL");
 
   // Upload form state (per order)
@@ -102,7 +107,7 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
   }, [orders]);
 
   const filtered = useMemo(() => {
-    return orders.filter((o) => {
+    return filterFolderOrders(orders,folderFilters).filter((o) => {
       const meta = safeParseNotes(o.notes) || {};
       const po = meta?.poNumber ? `PO-${meta.poNumber}` : `ORD-${String(o.id).slice(-6)}`;
       const distributorName =
@@ -117,7 +122,7 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
       }
       return true;
     });
-  }, [orders, q, docTypeFilter]);
+  }, [orders, q, docTypeFilter, folderFilters]);
 
   async function refreshOrder(orderId: string) {
     // Optional endpoint (Step 3 me banega) — if not present, fallback to reload
@@ -248,6 +253,7 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
         </div>
       </div>
 
+      <div className="px-4 py-3"><OrderFolderControls filters={folderFilters} setFilters={setFolderFilters} orders={orders} admin={true}/></div>
       {/* Table Head */}
       <div className="bg-[#FBF9F6] border-b border-[#EEEAE2] grid grid-cols-[1.4fr_1.2fr_0.9fr_0.9fr_40px] px-6 py-2 sticky top-[65px] z-30">
         <div className={labelCls}>Order Detail</div>
@@ -265,6 +271,7 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
           const po = meta?.poNumber ? `PO-${meta.poNumber}` : `ORD-${String(o.id).slice(-6)}`;
           const poDate = meta?.poDate || new Date(o.createdAt).toLocaleDateString();
           const docs = (o?.documents || []) as any[];
+          const visibleDocs=docs.filter(d=>!folderByOrder[o.id]||folderByOrder[o.id]==="ALL"||documentFolder(d)===folderByOrder[o.id]);
 
           const distributorLabel =
             o?.distributor?.name ||
@@ -282,6 +289,7 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
                 <div className="flex flex-col pr-4 border-r border-[#EEEAE2]">
                   <div className="text-[12px] font-bold text-black">{po}</div>
                   <div className="text-[10px] text-[#A39E93]">{poDate}</div>
+                  <div className="text-[10px] text-[#6B665C]">{orderCurrency(o)} {orderValue(o).toLocaleString("en-IN",{maximumFractionDigits:2})} · {String(o.status||"RECEIVED")}</div>
                 </div>
 
                 <div className="px-2 border-r border-[#EEEAE2] text-[11px] truncate">
@@ -393,9 +401,10 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
                       <div className="text-[10px] text-[#A39E93]">{docs.length} files</div>
                     </div>
 
-                    {docs.length ? (
+                    <OrderFolderTabs documents={docs} selected={folderByOrder[o.id]||"ALL"} onSelect={folder=>setFolderByOrder(prev=>({...prev,[o.id]:folder}))}/>
+                    {visibleDocs.length ? (
                       <div className="divide-y divide-[#F2EFE9]">
-                        {docs.map((d) => {
+                        {visibleDocs.map((d) => {
                           const type = docTypeLabel(d);
                           const url = docUrl(d);
                           const canOpen = !!url;
