@@ -32,7 +32,7 @@ export default async function OperationsInboxPage() {
         <h1 className="text-3xl font-semibold">Gmail Order & Shipment Review</h1>
         <p className="mt-2 text-sm text-stone-600">Read-only search of info@casadenza.com. Suggested matches are unverified; nothing is shared with distributors.</p>
       </div>
-      <div className="flex gap-3 text-sm"><Link className="underline" href="/admin/mailboxes">Gmail connection</Link><Link className="underline" href="/admin/operations">Refresh queue</Link></div>
+      <div className="flex gap-3 text-sm"><Link className="underline font-semibold" href="/admin/operations/preview">Order & document preview</Link><Link className="underline" href="/admin/mailboxes">Gmail connection</Link><Link className="underline" href="/admin/operations">Refresh queue</Link></div>
     </div>
     {error ? <p role="alert" className="rounded-xl border p-4 text-red-700">Review queue is unavailable. Check the production database migration.</p> :
       <section className="grid gap-3 sm:grid-cols-3">
