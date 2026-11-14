@@ -105,3 +105,50 @@ test("invoice without invoice number and without quantity is held for review",()
   pdfs:[pdf("invoice.pdf","Billing contact Wow Factor Trading LLC")]});
  assert.equal(r[0].state,"NEEDS_REVIEW");
 });
+
+test("forwarded thread mentioning two invoices must remain unassigned",()=>{
+  const r=match({subject:"RE CST-26-27-25 and CST-26-27-21",from:"agent@freight.test",
+    pdfs:[pdf("packing list.pdf","Consignee: Wow Factor Trading LLC\n175 sheets")]});
+  assert.equal(r[0].suggestedOrderId,null);
+  assert.ok(r[0].conflicts.some(s=>s.includes("Multiple order references")));
+});
+test("invoice substring is not treated as an exact invoice reference",()=>{
+  const r=match({subject:"Invoice CST-26-27-250 Wow Factor",from:"logistics@wowfactor.ae",
+    pdfs:[pdf("invoice.pdf","Buyer: Wow Factor Trading LLC\n175 sheets")]});
+  assert.equal(r[0].evidence.includes("Exact PO/invoice reference"),false);
+});
+test("customer name Wow Factory is not Wow Factor",()=>{
+ const r=match({subject:"Wow Factory 175 sheets packing list",from:"unknown@forwarder.test",
+    pdfs:[pdf("packing list.pdf","Buyer: Wow Factory Industries\n175 sheets")]});
+ assert.equal(r[0].suggestedOrderId,null);
+});
+test("an invoice with a missing consignee but exact PO is a proposal, not an automatic share",()=>{
+ const r=match({subject:"WF-2026-175 commercial invoice",from:"agent@forwarder.test",
+    pdfs:[pdf("invoice.pdf","Invoice reference WF-2026-175")]});
+ assert.equal(r[0].state,"NEEDS_REVIEW");
+});
+test("two legitimate attachments in one email become separate candidates",()=>{
+ const r=match({subject:"Wow Factor invoice CST-26-27-25 / documents",
+    from:"logistics@wowfactor.ae",pdfs:[
+      pdf("invoice CST-26-27-25.pdf","Buyer: Wow Factor Trading LLC\n175 sheets","p1"),
+      pdf("packing list.pdf","Consignee: Wow Factor Trading LLC\n175 sheets","p2")]});
+ assert.equal(r.length,2);
+ assert.ok(r.some(x=>x.kind==="PACKING_LIST"));
+});
+test("mixed legitimate invoice plus marketing attachment drops marketing only",()=>{
+ const r=match({subject:"Wow Factor invoice CST-26-27-25",from:"logistics@wowfactor.ae",
+  pdfs:[pdf("invoice.pdf","Buyer: Wow Factor Trading LLC\n175 sheets","p1"),
+        pdf("catalogue 2026.pdf","Company brochure","p2")]});
+ assert.equal(r.length,1);
+});
+test("PI with matching customer but quantity from other order stays unassigned",()=>{
+ const r=match({subject:"Wow Factor PI CST-26-27-25 for 175 sheets",from:"logistics@wowfactor.ae",
+   pdfs:[pdf("PI CST-26-27-25.pdf","Buyer: Wow Factor Trading LLC\n125 sheets")]});
+ assert.equal(r[0].suggestedOrderId,null);
+});
+test("shipping bill from forwarder with customer and matching PDF quantity is proposed",()=>{
+ const r=match({subject:"SB 38392 for Wow Factor 175 sheets",from:"export@agent.test",
+   pdfs:[pdf("Shipping Bill SB38392.pdf","Consignee: Wow Factor Trading LLC\n175 sheets")]});
+ assert.equal(r[0].kind,"SHIPPING_BILL");
+ assert.equal(r[0].suggestedOrderId,"dubai-175");
+});
