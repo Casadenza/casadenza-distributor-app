@@ -321,3 +321,12 @@ model MarketingAsset {
   @@index([category])
   @@index([isActive])
 }
+
+model GmailMailboxConnection {
+  mailbox               String   @id
+  address               String
+  encryptedRefreshToken String   @db.Text
+  connectedBy           String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
