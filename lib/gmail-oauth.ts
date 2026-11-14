@@ -89,7 +89,18 @@ export async function exchangeCode(code: string) {
       redirect_uri: redirectUri(), grant_type: "authorization_code",
     }), cache: "no-store",
   });
-  if (!response.ok) throw new Error("Google authorization exchange failed");
+  if (!response.ok) {
+    // Google OAuth error codes are public protocol identifiers, never credentials.
+    // Keep descriptions, codes, tokens and request details out of application logs.
+    const payload: unknown = await response.json().catch(() => null);
+    const googleError = payload && typeof payload === "object" && "error" in payload
+      ? (payload as {error?:unknown}).error : null;
+    const allowed = new Set(["invalid_client", "invalid_grant", "invalid_request",
+      "unauthorized_client", "access_denied", "unsupported_grant_type"]);
+    const reason = typeof googleError === "string" && allowed.has(googleError)
+      ? googleError : "unclassified";
+    throw new Error("Google authorization exchange failed: " + reason);
+  }
   const result = await response.json() as { access_token?: string; refresh_token?: string; scope?: string };
   if (!result.access_token || !result.refresh_token ||
       !result.scope?.split(" ").includes(scope)) throw new Error("Google did not grant offline read-only Gmail permission");
