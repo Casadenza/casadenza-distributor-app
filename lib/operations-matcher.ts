@@ -63,7 +63,7 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
         const email = (o.distributorEmail||"").toLowerCase().trim();
         const customerEmail = email.length>5 && from.includes(email);
         const qty = Number(o.quantity);
-        const quantity = qty>0 && new RegExp("(?:^|\\\\D)"+qty+"\\\\s*(?:sheets?|pcs?|pieces?|panels?)(?:\\\\D|$)","i").test(context);
+        const quantity = qty>0 && new RegExp("(?:^|\\D)"+qty+"\\s*(?:sheets?|pcs?|pieces?|panels?)(?:\\D|$)","i").test(context);
         // Quantity or country by itself must NEVER attach a document to an order.
         const score = (reference?100:0)+(customerName?35:0)+(customerEmail?35:0)+(quantity?15:0);
         return {order:o,score,reference,customerName,customerEmail,quantity};
