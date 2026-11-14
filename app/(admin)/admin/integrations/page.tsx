@@ -89,8 +89,8 @@ export default async function IntegrationStatusPage() {
       <StatusCard title="Email SMTP settings" good={s.env.smtp} details="Checks whether SMTP_USER and SMTP_PASS are set. Actual delivery must be tested before launch."/>
       <StatusCard title="Gmail shipment search — info@" good={!!s.gmailMailboxes.find(m => m.mailbox === "info")?.configured}
         details="Read-only Gmail access for info@casadenza.com. Requires Google OAuth setup; configuration presence does not prove authorization."/>
-      <StatusCard title="Gmail shipment search — neeraj@" good={!!s.gmailMailboxes.find(m => m.mailbox === "neeraj")?.configured}
-        details="Read-only Gmail access for neeraj@casadenza.com. Configure OAuth separately, without sharing passwords."/>
+      <StatusCard title="Gmail shipment search — alex@" good={!!s.gmailMailboxes.find(m => m.mailbox === "alex")?.configured}
+        details="Read-only Gmail access for alex@casadenza.in. Configure OAuth separately, without sharing passwords."/>
       <StatusCard title="Inbox email alerts — default setting" good={process.env.VERCEL_ENV === "production" && s.env.smtp && process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS !== "false"}
         details={process.env.CASADENZA_INBOX_EMAIL_NOTIFICATIONS === "false"
           ? "System-wide default OFF. Set CASADENZA_INBOX_EMAIL_NOTIFICATIONS=true in Vercel to restore it."
