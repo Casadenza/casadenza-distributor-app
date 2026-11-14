@@ -3,6 +3,7 @@ import type { IntakeMessage, ShipmentMailbox } from "@/lib/shipment-mail";
 export type OperationsOrder = {
   id: string; distributorId: string; distributorName: string; country: string | null;
   poNumber: string; invoiceNumber: string; buyerPoRef: string; date: string;
+  distributorEmail?: string; billingName?: string; quantity?: number;
 };
 export type OperationsCandidate = {
   id: string; mailbox: ShipmentMailbox; messageId: string; partId: string | null;
@@ -46,24 +47,51 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
       const id = m.mailbox + ":" + m.messageId + ":" + (pdf.partId || "body");
       if (unique.has(id)) continue;
       const haystack = normalized([m.subject, m.snippet, pdf.filename || ""].join(" "));
-      const matched = orders.filter(o => {
-        const refs = [o.poNumber,o.invoiceNumber,o.buyerPoRef].map(normalized)
-          .filter(x => x.length >= 7);
-        // Reference match does not identify the actual document's consignee.
-        return refs.some(ref => haystack.includes(ref));
-      });
-      const match = matched.length===1 ? matched[0] : null;
-      const state = matched.length>1 ? "MULTIPLE_MATCHES" : match ? "POSSIBLE_ORDER_MATCH" : "NEEDS_REVIEW";
+      const context = [m.subject,m.snippet,pdf.filename||""].join(" ").toLowerCase();
+      const kind = classify(pdf.filename || "",m.subject);
+      const documentSignal = kind !== "OTHER" ||
+        /\b(invoice|purchase order|packing list|waybill|hawb|mawb|awb|tracking|shipment|shipped|dispatch|bill of lading|consignee|proforma)\b/i.test(context);
+      // Catalogues, marketing collateral, vendor receipts and generic PDFs are not
+      // candidate shipment documents unless a strong exact order reference exists.
+      const unrelated = /\b(catalogue|catalog|brochure|newsletter|marketing|portfolio|presentation|resume|cv|advertisement|statement|receipt)\b/i.test(pdf.filename||"");
+      const scores = orders.map(o=>{
+        const refs = [o.poNumber,o.invoiceNumber,o.buyerPoRef].map(normalized).filter(x=>x.length>=7);
+        const reference = refs.some(ref=>haystack.includes(ref));
+        const names = [o.distributorName,o.billingName||""].map(normalized).filter(x=>x.length>=6);
+        const customerName = names.some(name=>haystack.includes(name));
+        const from = m.from.toLowerCase();
+        const email = (o.distributorEmail||"").toLowerCase().trim();
+        const customerEmail = email.length>5 && from.includes(email);
+        const qty = Number(o.quantity);
+        const quantity = qty>0 && new RegExp("(?:^|\\\\D)"+qty+"\\\\s*(?:sheets?|pcs?|pieces?|panels?)(?:\\\\D|$)","i").test(context);
+        // Quantity or country by itself must NEVER attach a document to an order.
+        const score = (reference?100:0)+(customerName?35:0)+(customerEmail?35:0)+(quantity?15:0);
+        return {order:o,score,reference,customerName,customerEmail,quantity};
+      }).filter(x=>x.reference||(documentSignal&&(x.customerName||x.customerEmail)));
+      scores.sort((a,b)=>b.score-a.score);
+      const top = scores[0];
+      const tie = !!top && scores.filter(x=>x.score===top.score).length>1;
+      const supported = top && (top.reference ||
+        ((top.customerName||top.customerEmail) && (top.quantity||documentSignal)));
+      if ((!documentSignal&&!top?.reference) || (unrelated&&!top?.reference)) continue;
+      const match = supported&&!tie ? top.order : null;
+      const state = tie ? "MULTIPLE_MATCHES" : match ? "POSSIBLE_ORDER_MATCH" : "NEEDS_REVIEW";
+      const evidence = top ? [
+        top.reference?"exact PO/invoice reference":null,
+        top.customerName?"customer/billing name":null,
+        top.customerEmail?"registered customer email":null,
+        top.quantity?"ordered sheet quantity":null,
+      ].filter(Boolean).join(", ") : "";
       unique.set(id,{
         id, mailbox:m.mailbox, messageId:m.messageId, partId:pdf.partId,
         filename:pdf.filename, subject:m.subject, from:m.from,date:m.date,snippet:m.snippet,
-        kind:classify(pdf.filename || "",m.subject),state,
+        kind,state,
         suggestedOrderId:match?.id||null,suggestedDistributorId:match?.distributorId||null,
         suggestedDistributorName:match?.distributorName||null,
         reason:state==="MULTIPLE_MATCHES"
-          ? "The same reference appears on several orders; manual review required."
-          : match ? "Existing PO/invoice reference found. Consignee inside PDF is not yet verified."
-          : "No unique existing portal order reference found. Review customer and order.",
+          ? "Multiple orders share the strongest evidence. Verify the exact consignee and invoice."
+          : match ? "Possible match based on "+evidence+". PDF contents and consignee not verified; no document shared."
+          : "Relevant shipping/order message but no unique customer/order evidence. Manual review required.",
       });
     }
   }
