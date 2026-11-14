@@ -51,6 +51,7 @@ model Distributor {
   tickets Ticket[]
   orders  Order[]
   communicationThreads CommunicationThread[]
+  rewardsWallet PartnerRewardsWallet?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -366,4 +367,86 @@ model CommunicationMessage {
 
   @@index([threadId, createdAt])
   @@index([senderUserId])
+}
+
+
+// -------------------- PARTNER REWARDS (PENDING MIGRATION) --------------------
+// Points are non-expiring. Wallet balance is always updated with ledger entries
+// in the same transaction. Only verified invoices and approved submissions earn.
+model PartnerRewardsWallet {
+  distributorId String @id
+  distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  balance       Int @default(0)
+  lifetimeEarned Int @default(0)
+  lifetimeRedeemed Int @default(0)
+  ledger        PartnerRewardLedger[]
+  submissions   PartnerRewardSubmission[]
+  redemptions   PartnerRewardRedemption[]
+  sales         PartnerRewardSale[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PartnerRewardLedger {
+  id            String @id @default(cuid())
+  distributorId String
+  wallet        PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  kind          String
+  points        Int
+  sourceKey     String @unique
+  description   String
+  createdAt     DateTime @default(now())
+
+  @@index([distributorId, createdAt])
+}
+
+model PartnerRewardSubmission {
+  id               String @id @default(cuid())
+  distributorId    String
+  wallet           PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  type             String
+  reference        String
+  description      String
+  evidenceUrl      String?
+  marketingConsent Boolean @default(false)
+  status           String @default("PENDING")
+  awardedPoints    Int @default(0)
+  reviewNote       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  @@unique([distributorId, type, reference])
+  @@index([status, createdAt])
+}
+
+model PartnerRewardRedemption {
+  id              String @id @default(cuid())
+  distributorId   String
+  wallet          PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  type            String
+  points          Int
+  orderId         String?
+  notes           String
+  status          String @default("REQUESTED")
+  reviewerNote    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([distributorId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model PartnerRewardSale {
+  id              String @id @default(cuid())
+  distributorId   String
+  wallet          PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  invoiceId       String
+  invoiceDate     DateTime
+  netUsdCents     Int
+  pointsAwarded   Int
+  verifiedBy      String
+  createdAt       DateTime @default(now())
+
+  @@unique([distributorId, invoiceId])
+  @@index([distributorId, invoiceDate])
 }
