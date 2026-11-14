@@ -1,11 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "schedules": {
-    "casadenza-order-inbox": {
-      "schedule": "*/15 * * * *",
-      "timezone": "UTC",
+  "crons": [
+    {
       "path": "/api/cron/operations-inbox",
-      "requestMethod": "GET"
+      "schedule": "*/15 * * * *"
     }
-  }
+  ]
 }
