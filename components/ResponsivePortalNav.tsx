@@ -19,7 +19,7 @@ export default function ResponsivePortalNav({ role }: { role: "ADMIN" | "DISTRIB
   const nav = role === "ADMIN"
     ? [
       ["Dashboard", "/admin"], ["Integrations", "/admin/integrations"], ["Distributors", "/admin/distributors"],
-      ["Orders Hub", "/admin/orders"], ["Communication Centre", "/admin/communications"],
+      ["Orders Hub", "/admin/orders"], ["Email Order Intake", "/admin/order-intake"], ["Partner Rewards", "/admin/rewards"], ["Communication Centre", "/admin/communications"],
       ["Products", "/admin/products"], ["Prices", "/admin/prices"],
       ["Documents", "/admin/documents"], ["Marketing Toolkit", "/admin/marketing-toolkit"],
       ["New Arrivals", "/admin/new-arrivals"], ["Packing Calculator", "/admin/packing-calculator"],
@@ -27,7 +27,7 @@ export default function ResponsivePortalNav({ role }: { role: "ADMIN" | "DISTRIB
     : [
       ["Home", "/dashboard"], ["Business Overview", "/dashboard/business"], ["Communication Centre", "/dashboard/communications"],
       ["Products", "/dashboard/products"], ["Price & Schemes", "/dashboard/price-schemes"],
-      ["Place Order", "/dashboard/place-order"], ["My Orders", "/dashboard/my-orders"],
+      ["Place Order", "/dashboard/place-order"], ["My Orders", "/dashboard/my-orders"], ["Partner Rewards", "/dashboard/rewards"],
       ["New Arrivals", "/dashboard/new-arrivals"], ["Documents", "/dashboard/documents"],
       ["Training", "/dashboard/training"], ["Marketing Toolkit", "/dashboard/marketing-toolkit"],
       ["Packing Calculator", "/dashboard/packing-calculator"],
