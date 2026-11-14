@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import OrderFolderControls from "@/components/documents/order-folder-controls";
+import DocumentReadinessIndicator from "@/components/documents/document-readiness";
 import OrderFolderTabs from "@/components/documents/order-folder-tabs";
 import {filterFolderOrders,INITIAL_FOLDER_FILTERS,documentFolder,orderValue,orderCurrency,type FolderFilters,type FolderKind} from "@/lib/order-document-folders";
 import {
@@ -274,6 +275,7 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
           const docs = (o?.documents || []) as any[];
           const visibleDocs=docs.filter(d=>!folderByOrder[o.id]||folderByOrder[o.id]==="ALL"||documentFolder(d)===folderByOrder[o.id]);
           const proposed=internalProposals.filter(p=>p.suggestedOrderId===o.id);
+          const readinessOrder=o;
 
           const distributorLabel =
             o?.distributor?.name ||
@@ -394,6 +396,7 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
                     </div>
                   </div>
 
+                  <DocumentReadinessIndicator order={readinessOrder} admin={true}/>
                   {/* Internal-only Gmail matches. Never included in the distributor documents relation. */}
                   <section className="mb-4 overflow-hidden rounded-lg border border-amber-200 bg-amber-50/50">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 px-4 py-3">
