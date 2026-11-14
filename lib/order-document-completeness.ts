@@ -1,4 +1,4 @@
-import {documentFolder, type FolderDocument, type FolderOrder, type FolderKind,parseOrderNotes} from "./order-document-folders";
+import {documentFolder, type FolderDocument, type FolderOrder, type FolderKind,parseOrderNotes} from "./order-document-folders.ts";
 
 export type DocumentReadiness = {
   phase:"ORDER"|"PRE_SHIPMENT"|"IN_TRANSIT"|"DELIVERED"|"CLOSED";
