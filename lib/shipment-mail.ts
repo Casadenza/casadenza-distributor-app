@@ -237,12 +237,38 @@ export type IntakeMessage = {
 };
 export async function scanRecentMailbox(mailbox: ShipmentMailbox): Promise<IntakeMessage[]> {
   const token = await getAccessToken(mailbox);
-  const q = mailbox === "info"
-    ? '-in:spam -in:trash newer_than:21d has:attachment filename:pdf'
-    : '-in:spam -in:trash newer_than:21d {subject:"purchase order" subject:"new order" subject:"PO" filename:pdf}';
+  // Both mailboxes have identical intake coverage: orders, invoices,
+  // packing lists, AWB/HAWB, shipping documents and related messages.
+  // Do not assign document categories to specific email addresses.
+  const q = '-in:spam -in:trash newer_than:21d {filename:pdf subject:"purchase order" subject:"new order" subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking}';
   const list = await gmailGet<ListResponse>(token, "messages?" +
-    new URLSearchParams({ q, maxResults: "35" }));
-  const messages = await Promise.all((list.messages || []).slice(0, 35).map(async ({ id }) => {
+    new URLSearchParams({ q, maxResults: "50" }));
+  const messages = await Promise.all((list.messages || []).slice(0, 50).map(async ({ id }) => {
+    if (!validMessageId(id)) return null;
+    try {
+      const data = await gmailGet<GmailMessage>(token, "messages/" + encodeURIComponent(id) + "?format=full");
+      const headers = data.payload?.headers || [];
+      const header = (name: string) => headers.find(h => h.name.toLowerCase() === name)?.value || "";
+      return {
+        mailbox, messageId: id, subject: header("subject").slice(0, 300),
+        from: header("from").slice(0, 250), date: header("date").slice(0, 140),
+        snippet: (data.snippet || "").slice(0, 420),
+        pdfs: collectPdfParts(data.payload),
+      };
+    } catch { return null; }
+  }));
+  return messages.filter((m): m is IntakeMessage => m !== null);
+}
+
+/** One reference-search policy for BOTH mailboxes; includes text-only order messages. */
+export async function searchOperationsMailbox(mailbox: ShipmentMailbox, reference: string): Promise<IntakeMessage[]> {
+  const token = await getAccessToken(mailbox);
+  const literal = reference.replace(/[\r\n"\\]/g, " ").trim().replace(/\s+/g, " ");
+  if (literal.length < 3 || literal.length > 90) return [];
+  const q = '-in:trash -in:spam "' + literal + '"';
+  const list = await gmailGet<ListResponse>(token, "messages?" +
+    new URLSearchParams({ q, maxResults: "30" }));
+  const messages = await Promise.all((list.messages || []).slice(0, 30).map(async ({ id }) => {
     if (!validMessageId(id)) return null;
     try {
       const data = await gmailGet<GmailMessage>(token, "messages/" + encodeURIComponent(id) + "?format=full");
