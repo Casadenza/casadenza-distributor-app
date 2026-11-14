@@ -49,8 +49,8 @@ export function parseForwarderReport(sender:string,subject:string,body:string){
  // Only the newest authored content; quoted history can contain stale ETDs/ETAs.
  const fresh=body.split(/(?:^|\n)(?:From:|Sent:|On .{3,100} wrote:|_{6,}|={8,})/im)[0].slice(0,9000);
  const header=[subject,fresh].join("\n");
- const etd=capture(fresh,/\b(?:ETD|Sailed\s+\w+|OnBoard Date|On Board Date)\s*(?:[^\r\n]{0,30})\n?\s*[:\-]?\s*(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/i);
- const eta=capture(fresh,/\bETA\s*[A-Z ]{0,35}\s*[:\-]?\s*(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/i);
+ const etd=capture(fresh,/(?:^|\n)\s*(?:OnBoard Date|On Board Date|ETD(?:\s+[A-Z ]{0,30})?|Sailed NHAVA SHEVA)\s*[:\-]?\s*\n?\s*(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/im);
+ const eta=capture(fresh,/(?:^|\n)\s*ETA(?:\s+[A-Z ]{0,35})?\s*[:\-]?\s*\n?\s*(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/im);
  const air=capture(header,/\b(?:AWB(?: NO)?|HAWB(?: NO)?|MAWB(?: NO)?)[\s:\/#-]*([A-Z]{0,3}\d{6,14})\b/i);
  const booking=capture(subject,/\b(AE\d{5,10}|RD\d{2,8}|\d{4}\/\d{4})\b/i);
  const ref=capture(header,/\b(CST[\/_-]\d{2}[\/_-]\d{2}[\/_-]\d{1,4})\b/i);
