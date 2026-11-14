@@ -16,6 +16,7 @@ type GmailMessage = {
   threadId?: string;
   payload?: MailPart & { headers?: { name: string; value: string }[] };
   internalDate?: string;
+  snippet?: string;
 };
 type ListResponse = { messages?: { id: string }[] };
 type AttachmentResponse = { data?: string; size?: number };
@@ -180,4 +181,42 @@ export async function readShipmentPdf(input: {
       buffer.subarray(0, 5).toString("ascii") !== "%PDF-") throw authError("INVALID_DOCUMENT");
   const subject = message.payload?.headers?.find(h => h.name.toLowerCase() === "subject")?.value || "";
   return { buffer, filename: part.filename!.trim().slice(0, 180), subject: subject.slice(0, 300) };
+}
+
+
+export type OrderEmailCandidate = {
+  messageId: string;
+  mailbox: "alex";
+  from: string;
+  subject: string;
+  date: string;
+  snippet: string;
+  pdfs: { partId: string; filename: string; size: number }[];
+};
+
+/** Read-only order intake. These are unverified leads, never portal orders. */
+export async function searchAlexOrderInbox(): Promise<OrderEmailCandidate[]> {
+  const token = await getAccessToken("alex");
+  const params = new URLSearchParams({
+    q: '-in:trash -in:spam newer_than:60d {subject:"purchase order" subject:"new order" subject:"PO received" subject:"PO" filename:po.pdf}',
+    maxResults: "30",
+  });
+  const search = await gmailGet<ListResponse>(token, "messages?" + params);
+  const messages = await Promise.all((search.messages || []).slice(0, 30).map(async ({ id }) => {
+    if (!validMessageId(id)) return null;
+    try {
+      const data = await gmailGet<GmailMessage>(token, "messages/" + encodeURIComponent(id) + "?format=full");
+      const headers = data.payload?.headers || [];
+      const header = (name: string) => headers.find(h => h.name.toLowerCase() === name)?.value || "";
+      return {
+        messageId: id, mailbox: "alex" as const,
+        from: header("from").slice(0, 240),
+        subject: header("subject").slice(0, 300),
+        date: header("date").slice(0, 120),
+        snippet: (data.snippet || "").slice(0, 360),
+        pdfs: collectPdfParts(data.payload),
+      };
+    } catch { return null; }
+  }));
+  return messages.filter((m): m is OrderEmailCandidate => m !== null);
 }
