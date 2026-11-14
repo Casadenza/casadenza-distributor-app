@@ -41,6 +41,19 @@ export async function GET(request: Request) {
   if (mailboxes.length !== 1 || mailboxes.some(m=>!m.configured)) {
     return json({ok:false,active:false,reason:"The info@casadenza.com Gmail connection must be authorized."},503);
   }
+  // Administrator-only diagnostic through the same cron bearer; never persists data.
+  // Return only sanitized error categories, never Gmail tokens or email contents.
+  if (new URL(request.url).searchParams.get("diagnose") === "1") {
+    try {
+      const sample = await scanRecentMailbox("info", {days:1,limit:1});
+      return json({ok:true,mailbox:"info",sampleMessages:sample.length});
+    } catch (error) {
+      const code = error instanceof Error && /^GMAIL_[A-Z_]+$/.test(error.message)
+        ? error.message : "SCAN_FAILED";
+      console.error("Operations inbox diagnostic",code);
+      return json({ok:false,mailbox:"info",error:code},503);
+    }
+  }
   const slot = scheduledSlot(new Date());
   let scanRun: {id:string};
   try {
@@ -103,6 +116,7 @@ export async function GET(request: Request) {
       ? [mailboxes[i].mailbox+":"+(s.reason instanceof Error && /^GMAIL_[A-Z_]+$/.test(s.reason.message)
         ? s.reason.message:"SCAN_FAILED")] : []);
     const partialMailbox=scanResults.some(s=>s.status==="fulfilled"&&s.value.length>=80);
+    if(issueCodes.length) console.error("Operations inbox scan issue codes",issueCodes);
     const status=issueCodes.length===mailboxes.length?"FAILED":(issueCodes.length>0||partialMailbox||gaps.length>0?"PARTIAL":"SUCCESS");
     await prisma.operationsInboxScanRun.update({
       where:{id:scanRun.id},
