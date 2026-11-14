@@ -250,7 +250,7 @@ export type IntakeMessage = {
   from: string;
   date: string;
   snippet: string;
-  pdfs: { partId: string; filename: string; size: number }[];
+  pdfs: { partId: string; filename: string; size: number; text?: string }[];
 };
 export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { days?: number; limit?: number; afterEpochSeconds?: number }): Promise<IntakeMessage[]> {
   const token = await getAccessToken(mailbox);
