@@ -11,6 +11,8 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
  const [message,setMessage]=useState("");
  const [reports,setReports]=useState<Array<{messageId:string;date:string;subject:string;proposed:{agent:string;etd:string;eta:string;etdLocation:string;etaLocation:string;finalDestination:string;vessel:string;container:string;status:string;booking:string;invoiceRef:string;transportMode:string}}>>([]);
  const [scanning,setScanning]=useState(false);
+ const [showAll,setShowAll]=useState(false);
+ const [showReports,setShowReports]=useState(false);
  const link=carrierTrackingLink(details.carrier,details.trackingNumber);
  async function findOrangestar(){
   setScanning(true);setMessage("");
@@ -79,13 +81,15 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
         type={field==="etd"||field==="eta"?"date":"text"} maxLength={100}/>}
     </label>)}
     <div className="col-span-full"><button type="button" onClick={()=>void save()} disabled={busy} className="rounded bg-stone-900 px-4 py-2 text-xs text-white disabled:opacity-50">{busy?"Saving…":"Save verified shipment details"}</button></div>
-  </div>:<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-    {readOnly.map(([label,value])=><div className="rounded-md bg-stone-50 px-2 py-2" key={label}>
+  </div>:<div className="space-y-3"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    {readOnly.filter(([label])=>showAll||["Freight agent","Carrier","Tracking number","ETA","ETD","Status"].includes(label)).map(([label,value])=><div className="rounded-md bg-stone-50 px-2 py-2" key={label}>
       <p className="text-[10px] text-stone-500">{label}</p>
       <p className="mt-1 break-all text-xs font-medium">{value||"Pending"}</p>
     </div>)}
-  </div>}
-  {admin&&<div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+  </div><button onClick={()=>setShowAll(v=>!v)} className="rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-600">{showAll?"Show less":"Show all shipment details"}</button></div>}
+  {admin&&<div className="rounded-xl border border-stone-200 p-3 space-y-2">
+    <button onClick={()=>setShowReports(v=>!v)} className="text-sm font-medium">{showReports?"Hide Orangestar report search":"Search Orangestar shipment reports"}</button>
+    {showReports&&<>
     <div className="flex items-center justify-between gap-2">
       <div><strong className="text-xs">Orangestar shipping reports</strong><p className="text-[11px] text-stone-500">Search by exact order references, not company name alone.</p></div>
       <button type="button" disabled={scanning} onClick={()=>void findOrangestar()} className="rounded-lg bg-stone-900 px-3 py-2 text-xs text-white disabled:opacity-50">{scanning?"Searching…":"Find Orangestar reports"}</button>
@@ -96,6 +100,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
        <p>ETD {r.proposed.etd||"Not stated"} {r.proposed.etdLocation||""} · ETA {r.proposed.eta||"Not stated"} {r.proposed.etaLocation||""} · {r.proposed.status}</p>
        <button className="rounded border px-2 py-1" onClick={()=>applyReport(r.proposed)}>Copy proposed details for verification</button>
      </div>)}
+    </>}
   </div>}
   {link&&<div className="flex flex-wrap items-center gap-3">
     <a href={link} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-stone-900 bg-stone-900 px-3 py-2 text-xs text-white">Track on {carrierNames[details.carrier]}</a>
