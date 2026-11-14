@@ -27,7 +27,7 @@ function scheduledSlot(now: Date) {
 
 /**
  * Vercel Schedules: every 15 minutes (available on Hobby as public beta).
- * Authorized production-only read of both Gmail inboxes and persistence of
+ * Authorized production-only read of the info@ Gmail inbox and persistence of
  * unverified candidate metadata. Never creates orders or shares documents.
  * Requires reviewed migration + AUTO_INBOX_SCAN_ENABLED=true + CRON_SECRET.
  */
@@ -37,9 +37,9 @@ export async function GET(request: Request) {
       process.env.AUTO_INBOX_SCAN_ENABLED !== "true") {
     return json({ok:false,active:false,reason:"Scheduled inbox scanning not enabled for this environment."},503);
   }
-  const mailboxes = await gmailMailboxStatus();
-  if (mailboxes.length !== 2 || mailboxes.some(m=>!m.configured)) {
-    return json({ok:false,active:false,reason:"Both info and Alex Gmail OAuth credentials must be configured."},503);
+  const mailboxes = (await gmailMailboxStatus()).filter(m => m.mailbox === "info");
+  if (mailboxes.length !== 1 || mailboxes.some(m=>!m.configured)) {
+    return json({ok:false,active:false,reason:"The info@casadenza.com Gmail connection must be authorized."},503);
   }
   const slot = scheduledSlot(new Date());
   let scanRun: {id:string};
@@ -50,15 +50,10 @@ export async function GET(request: Request) {
     return json({ok:false,error:"Scan history database not ready. Apply the approved migration first."},503);
   }
   try {
-    const [priorInfo, priorAlex] = await Promise.all([
-      prisma.operationsInboxScanRun.findFirst({
-        where:{infoStatus:"SUCCESS"},orderBy:{startedAt:"desc"},select:{startedAt:true},
-      }),
-      prisma.operationsInboxScanRun.findFirst({
-        where:{alexStatus:"SUCCESS"},orderBy:{startedAt:"desc"},select:{startedAt:true},
-      }),
-    ]);
-    const previous=[priorInfo,priorAlex];
+    const priorInfo = await prisma.operationsInboxScanRun.findFirst({
+      where:{infoStatus:"SUCCESS"},orderBy:{startedAt:"desc"},select:{startedAt:true},
+    });
+    const previous=[priorInfo];
     const now=Date.now();
     const backfillDays=3;
     const overlapMs=30*60*1000;
@@ -108,13 +103,13 @@ export async function GET(request: Request) {
       ? [mailboxes[i].mailbox+":"+(s.reason instanceof Error && /^GMAIL_[A-Z_]+$/.test(s.reason.message)
         ? s.reason.message:"SCAN_FAILED")] : []);
     const partialMailbox=scanResults.some(s=>s.status==="fulfilled"&&s.value.length>=80);
-    const status=issueCodes.length===2?"FAILED":(issueCodes.length>0||partialMailbox||gaps.length>0?"PARTIAL":"SUCCESS");
+    const status=issueCodes.length===mailboxes.length?"FAILED":(issueCodes.length>0||partialMailbox||gaps.length>0?"PARTIAL":"SUCCESS");
     await prisma.operationsInboxScanRun.update({
       where:{id:scanRun.id},
       data:{status,infoStatus:scanResults[0]?.status==="fulfilled"?"SUCCESS":"FAILED",
-        alexStatus:scanResults[1]?.status==="fulfilled"?"SUCCESS":"FAILED",
+        alexStatus:"SKIPPED",
         messagesScanned:allMessages.length,itemsAdded:added.count,
-        errorSummary:[...issueCodes,...gaps,...(partialMailbox?["One or more inboxes hit the 80-message scan cap; increase capacity if this persists."]:[])].join("; ")||null,
+        errorSummary:[...issueCodes,...gaps,...(partialMailbox?["The info inbox hit the 80-message scan cap; increase capacity if this persists."]:[])].join("; ")||null,
         completedAt:new Date()},
     });
     console.info("Operations inbox scan", {slot,status,messages:allMessages.length,candidates:rows.length,added:added.count});
