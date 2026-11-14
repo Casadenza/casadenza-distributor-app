@@ -21,7 +21,8 @@ export default async function OperationsPreviewPage() {
     prisma.operationsInboxItem.findMany({where:{mailbox:"info",reviewStatus:"PENDING"},
       orderBy:{firstSeenAt:"desc"},take:500,
       select:{id:true,messageId:true,partId:true,filename:true,subject:true,sender:true,
-        snippet:true,receivedAt:true,kind:true,firstSeenAt:true}}),
+        snippet:true,receivedAt:true,kind:true,firstSeenAt:true,
+        suggestedOrderId:true,matchState:true,matchReason:true}}),
   ]);
   const orders:OperationsOrder[]=rawOrders.map(o=>{
     let meta:Record<string,unknown>={};
@@ -52,6 +53,20 @@ export default async function OperationsPreviewPage() {
     filename:c.filename||"Email body",subject:c.subject,
     confidence:c.confidence,evidence:c.evidence,reason:c.reason,date:c.date,
   }));
+  // Some targeted scans used actual PDF text, which is intentionally not stored.
+  // Retain those prior proposals in the admin preview, marked as unverified.
+  const known=new Set(orders.map(o=>o.id));
+  const already=new Set(matches.map(m=>m.id));
+  for(const i of queue){
+    const id="info:"+i.messageId+":"+i.partId;
+    if(!i.suggestedOrderId || i.matchState!=="POSSIBLE_ORDER_MATCH" ||
+       !known.has(i.suggestedOrderId) || already.has(id)) continue;
+    matches.push({id,orderId:i.suggestedOrderId,kind:i.kind as typeof matches[number]["kind"],
+      filename:i.filename||"Email body",subject:i.subject,confidence:0,
+      evidence:["Previously suggested by Gmail scanner; independent revalidation required"],
+      reason:i.matchReason,date:(i.receivedAt||i.firstSeenAt).toISOString()});
+    already.add(id);
+  }
   const viewOrders=orders.map(o=>({
     id:o.id,customer:o.distributorName,country:o.country||"",
     date:o.date,quantity:o.quantity||0,invoice:o.invoiceNumber,
