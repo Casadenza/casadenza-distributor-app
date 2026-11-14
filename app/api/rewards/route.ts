@@ -22,15 +22,16 @@ export async function GET() {
   const policy = rewardPolicyPublic();
   if (!rewardFeatureEnabled()) return out({ ok: true, enabled: false, policy,
     wallet: { balance: 0, lifetimeEarned: 0, lifetimeRedeemed: 0 },
-    annualSalesUsd: 0, ledger: [], submissions: [], redemptions: [] });
+    annualSales: { USD: 0, EUR: 0 }, ledger: [], submissions: [], redemptions: [] });
   try {
     const distributorId = session.distributorId;
     const year = new Date().getUTCFullYear();
     const [wallet, annual, ledger, submissions, redemptions] = await Promise.all([
       prisma.partnerRewardsWallet.findUnique({ where: { distributorId } }),
-      prisma.partnerRewardSale.aggregate({
+      prisma.partnerRewardSale.groupBy({
+        by: ["currency"],
         where: { distributorId, invoiceDate: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) } },
-        _sum: { netUsdCents: true },
+        _sum: { netAmountCents: true },
       }),
       prisma.partnerRewardLedger.findMany({ where: { distributorId }, orderBy: { createdAt: "desc" }, take: 50 }),
       prisma.partnerRewardSubmission.findMany({ where: { distributorId }, orderBy: { createdAt: "desc" }, take: 50 }),
@@ -38,7 +39,8 @@ export async function GET() {
     ]);
     return out({ ok: true, enabled: true, policy,
       wallet: wallet || { balance: 0, lifetimeEarned: 0, lifetimeRedeemed: 0 },
-      annualSalesUsd: (annual._sum.netUsdCents || 0) / 100,
+      annualSales: { USD: (annual.find(a => a.currency === "USD")?._sum.netAmountCents || 0) / 100,
+        EUR: (annual.find(a => a.currency === "EUR")?._sum.netAmountCents || 0) / 100 },
       ledger, submissions, redemptions,
     });
   } catch {
