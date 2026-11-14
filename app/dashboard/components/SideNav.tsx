@@ -17,6 +17,7 @@ import {
   Calculator,
   Sparkles,
   ChevronRight,
+  Gift,
 } from "lucide-react";
 
 const NAV = [
@@ -30,6 +31,7 @@ const NAV = [
   { label: "New Arrivals", href: "/dashboard/new-arrivals", icon: Sparkles },
   { label: "Documents", href: "/dashboard/documents", icon: Files },
   { label: "Training", href: "/dashboard/training", icon: GraduationCap },
+  { label: "Partner Rewards", href: "/dashboard/rewards", icon: Gift },
   { label: "Marketing Toolkit", href: "/dashboard/marketing-toolkit", icon: Palette },
   { label: "Packing Calculator", href: "/dashboard/packing-calculator", icon: Calculator },
 ];
