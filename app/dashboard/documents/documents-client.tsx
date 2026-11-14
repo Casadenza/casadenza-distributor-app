@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import OrderFolderControls from "@/components/documents/order-folder-controls";
 import DocumentReadinessIndicator from "@/components/documents/document-readiness";
+import {documentReadiness,missingDocumentCount} from "@/lib/order-document-completeness";
 import OrderFolderTabs from "@/components/documents/order-folder-tabs";
 import {filterFolderOrders,INITIAL_FOLDER_FILTERS,documentFolder,orderCurrency,orderValue,type FolderFilters,type FolderKind} from "@/lib/order-document-folders";
 import {
@@ -260,11 +261,13 @@ export default function DocumentsClient({
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [q, setQ] = useState("");
   const [folderFilters,setFolderFilters]=useState<FolderFilters>(INITIAL_FOLDER_FILTERS);
+  const [missingOnly,setMissingOnly]=useState(false);
   const [folderByOrder,setFolderByOrder]=useState<Record<string,"ALL"|FolderKind>>({});
   const [docType, setDocType] = useState("ALL");
 
   const filtered = useMemo(() => {
     return filterFolderOrders(orders,folderFilters).filter((o) => {
+      if(missingOnly && documentReadiness(o).state!=="INCOMPLETE")return false;
       const meta = safeParseNotes(o.notes) || {};
       const po = meta?.poNumber
         ? `PO-${meta.poNumber}`
@@ -284,7 +287,7 @@ export default function DocumentsClient({
 
       return true;
     });
-  }, [orders, q, docType, folderFilters]);
+  }, [orders, q, docType, folderFilters,missingOnly]);
 
   const docTypeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -347,6 +350,10 @@ export default function DocumentsClient({
 
         <main className="mx-auto max-w-[1440px] px-6 py-8">
           <OrderFolderControls filters={folderFilters} setFilters={setFolderFilters} orders={orders} admin={false}/>
+      <div className="mx-4 my-2 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <span><strong>{missingDocumentCount(orders)}</strong> orders have outstanding baseline documents (based on their current workflow status).</span>
+        <label className="inline-flex items-center gap-2"><input type="checkbox" checked={missingOnly} onChange={e=>setMissingOnly(e.target.checked)}/>Show incomplete only</label>
+      </div>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Filter size={14} className="text-slate-400" />
