@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const mailboxes = gmailMailboxStatus();
+  const mailboxes = await gmailMailboxStatus();
   const importEnabled = process.env.VERCEL_ENV === "production" && process.env.ENABLE_SHIPMENT_DOCUMENT_IMPORT === "true";
   const reference = new URL(request.url).searchParams.get("reference")?.trim() || "";
   if (!reference) {
