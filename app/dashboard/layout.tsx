@@ -3,6 +3,7 @@ import { getServerSession } from "@/lib/serverSession";
 import { prisma } from "@/lib/db";
 import SideNav from "./components/SideNav";
 import TopBar from "./components/TopBar";
+import ResponsivePortalNav from "@/components/ResponsivePortalNav";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +44,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tier = dist?.tier ?? "STANDARD";
 
   return (
-    <div className="min-h-screen flex">
-      <SideNav tier={tier} latestDocumentAt={latestDocumentAt ? new Date(latestDocumentAt).toISOString() : null} />
-      <div className="flex-1 min-w-0">
-        <TopBar />
-        <main className="px-6 py-6">{children}</main>
+    <div className="min-h-screen xl:flex">
+      <div className="hidden xl:block"><SideNav tier={tier} latestDocumentAt={latestDocumentAt ? new Date(latestDocumentAt).toISOString() : null} /></div>
+      <div className="min-w-0 flex-1">
+        <ResponsivePortalNav role="DISTRIBUTOR"/><div className="hidden xl:block"><TopBar /></div>
+        <main className="px-3 py-4 sm:px-5 sm:py-6 lg:px-6">{children}</main>
       </div>
     </div>
   );

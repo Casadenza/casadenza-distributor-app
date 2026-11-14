@@ -5,16 +5,21 @@ import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Package, Zap, Users, Clock, 
   Files, GraduationCap, Palette, LifeBuoy, 
-  Calculator, Sparkles, ChevronRight 
+  Calculator, Sparkles, ChevronRight, Mail, Settings2, Plane, ClipboardList, Gift 
 } from "lucide-react";
 
 const NAV = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "Integrations", href: "/admin/integrations", icon: Settings2 },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Price & Schemes", href: "/admin/prices", icon: Zap },
   { label: "Distributors", href: "/admin/distributors", icon: Users },
+  { label: "Order & Shipment Hub", href: "/admin/operations", icon: ClipboardList },
   { label: "Orders Hub", href: "/admin/orders", icon: Clock },
+  { label: "Partner Rewards", href: "/admin/rewards", icon: Gift },
+  { label: "Messages", href: "/admin/communications", icon: Mail },
   { label: "Documents", href: "/admin/documents", icon: Files },
+
   { label: "Training Hub", href: "/admin/training", icon: GraduationCap },
   { label: "Marketing Tool", href: "/admin/marketing-toolkit", icon: Palette },
   { label: "New Arrivals", href: "/admin/new-arrivals", icon: Sparkles },

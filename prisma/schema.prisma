@@ -20,6 +20,7 @@ model User {
   forcePasswordReset Boolean @default(false)
 
   distributor Distributor?
+  communicationMessages CommunicationMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -36,6 +37,7 @@ model Distributor {
   defaultCurrency String  @default("INR")
   phone           String?
   email           String?
+  zohoAccountId   String? @unique
 
   // Billing
   billingName    String?
@@ -48,6 +50,8 @@ model Distributor {
 
   tickets Ticket[]
   orders  Order[]
+  communicationThreads CommunicationThread[]
+  rewardsWallet PartnerRewardsWallet?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -157,9 +161,14 @@ model Order {
   status String  @default("RECEIVED")
   eta    String?
   notes  String?
+  emailNotificationState String @default("NOT_SENT")
+  emailNotificationRequestedAt DateTime?
+  emailNotificationAdminSentAt DateTime?
+  emailNotificationDistributorSentAt DateTime?
 
   items     OrderItem[]
   documents OrderDocument[]
+  communicationThreads CommunicationThread[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -320,4 +329,185 @@ model MarketingAsset {
   @@index([type])
   @@index([category])
   @@index([isActive])
+}
+
+// -------------------- DISTRIBUTOR COMMUNICATIONS --------------------
+model CommunicationThread {
+  id            String      @id @default(cuid())
+  distributorId String
+  distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  orderId       String?
+  order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  subject       String
+  category      String      @default("GENERAL")
+  status        String      @default("OPEN")
+  messages      CommunicationMessage[]
+  lastMessageAt DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([distributorId, lastMessageAt])
+  @@index([orderId])
+}
+
+model CommunicationMessage {
+  id                  String              @id @default(cuid())
+  threadId            String
+  thread              CommunicationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderUserId        String?
+  sender              User?               @relation(fields: [senderUserId], references: [id], onDelete: SetNull)
+  senderRole          String
+  body                String
+  readByAdminAt       DateTime?
+  readByDistributorAt DateTime?
+  notificationStatus  String              @default("PENDING")
+  notificationSentAt  DateTime?
+  notificationError   String?
+  createdAt           DateTime            @default(now())
+
+  @@index([threadId, createdAt])
+  @@index([senderUserId])
+}
+
+
+// -------------------- PARTNER REWARDS (PENDING MIGRATION) --------------------
+// Points are non-expiring. Wallet balance is always updated with ledger entries
+// in the same transaction. Only verified invoices and approved submissions earn.
+model PartnerRewardsWallet {
+  distributorId String @id
+  distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  balance       Int @default(0)
+  lifetimeEarned Int @default(0)
+  lifetimeRedeemed Int @default(0)
+  ledger        PartnerRewardLedger[]
+  submissions   PartnerRewardSubmission[]
+  redemptions   PartnerRewardRedemption[]
+  sales         PartnerRewardSale[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PartnerRewardLedger {
+  id            String @id @default(cuid())
+  distributorId String
+  wallet        PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  kind          String
+  points        Int
+  sourceKey     String @unique
+  description   String
+  createdAt     DateTime @default(now())
+
+  @@index([distributorId, createdAt])
+}
+
+model PartnerRewardSubmission {
+  id               String @id @default(cuid())
+  distributorId    String
+  wallet           PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  type             String
+  reference        String
+  description      String
+  evidenceUrl      String?
+  marketingConsent Boolean @default(false)
+  status           String @default("PENDING")
+  awardedPoints    Int @default(0)
+  reviewNote       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  @@unique([distributorId, type, reference])
+  @@index([status, createdAt])
+}
+
+model PartnerRewardRedemption {
+  id              String @id @default(cuid())
+  distributorId   String
+  wallet          PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  type            String
+  points          Int
+  orderId         String?
+  notes           String
+  status          String @default("REQUESTED")
+  reviewerNote    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([distributorId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model PartnerRewardSale {
+  id              String @id @default(cuid())
+  distributorId   String
+  wallet          PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
+  invoiceId       String
+  invoiceDate     DateTime
+  currency        String
+  netAmountCents  Int
+  pointsAwarded   Int
+  verifiedBy      String
+  createdAt       DateTime @default(now())
+
+  @@unique([distributorId, invoiceId])
+  @@index([distributorId, invoiceDate])
+}
+
+
+// -------------------- AUTOMATED ORDER & SHIPMENT INBOX --------------------
+// Independent of customer-visible order documents; receiving an email never
+// creates an order or exposes an attachment to a distributor.
+model OperationsInboxItem {
+  id                       String   @id @default(cuid())
+  mailbox                  String
+  messageId                String
+  partId                   String
+  filename                 String?
+  sender                   String
+  subject                  String
+  snippet                  String?
+  receivedAt               DateTime?
+  kind                     String
+  matchState               String   @default("NEEDS_REVIEW")
+  reviewStatus             String   @default("PENDING")
+  suggestedOrderId         String?
+  suggestedDistributorId   String?
+  matchReason              String
+  attachedOrderId          String?
+  attachedDocumentId       String?
+  reviewedBy               String?
+  reviewedAt               DateTime?
+  firstSeenAt              DateTime @default(now())
+  lastSeenAt               DateTime @updatedAt
+
+  @@unique([mailbox, messageId, partId])
+  @@index([reviewStatus, receivedAt])
+  @@index([suggestedDistributorId, reviewStatus])
+  @@index([receivedAt])
+}
+
+model OperationsInboxScanRun {
+  id              String   @id @default(cuid())
+  scheduledSlot   String   @unique
+  status          String   @default("RUNNING")
+  infoStatus      String   @default("PENDING")
+  alexStatus      String   @default("PENDING")
+  messagesScanned Int      @default(0)
+  itemsAdded      Int      @default(0)
+  errorSummary    String?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([startedAt])
+}
+
+
+// Gmail credentials are encrypted with a server-only key before storage.
+// Never expose token values through admin endpoints or distributor views.
+model GmailMailboxConnection {
+  mailbox               String   @id
+  address               String
+  encryptedRefreshToken String   @db.Text
+  connectedBy           String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

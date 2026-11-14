@@ -10,22 +10,28 @@ import {
   PlusCircle,
   Clock,
   Files,
+  Mail,
+  BarChart3,
   GraduationCap,
   Palette,
   Calculator,
   Sparkles,
   ChevronRight,
+  Gift,
 } from "lucide-react";
 
 const NAV = [
   { label: "Home", href: "/dashboard", icon: Home },
+  { label: "Business Overview", href: "/dashboard/business", icon: BarChart3 },
   { label: "Products", href: "/dashboard/products", icon: Layers },
   { label: "Price & Schemes", href: "/dashboard/price-schemes", icon: Zap },
   { label: "Place Order", href: "/dashboard/place-order", icon: PlusCircle },
   { label: "My Orders", href: "/dashboard/my-orders", icon: Clock },
+  { label: "Messages", href: "/dashboard/communications", icon: Mail },
   { label: "New Arrivals", href: "/dashboard/new-arrivals", icon: Sparkles },
   { label: "Documents", href: "/dashboard/documents", icon: Files },
   { label: "Training", href: "/dashboard/training", icon: GraduationCap },
+  { label: "Partner Rewards", href: "/dashboard/rewards", icon: Gift },
   { label: "Marketing Toolkit", href: "/dashboard/marketing-toolkit", icon: Palette },
   { label: "Packing Calculator", href: "/dashboard/packing-calculator", icon: Calculator },
 ];

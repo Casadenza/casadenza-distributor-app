@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { getCommunicationActor, isSameOrigin } from "@/lib/communication-access";
+import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -16,7 +18,9 @@ function formatMoney(value: unknown) {
 
 function safeText(value: unknown) {
   if (value === null || value === undefined) return "";
-  return String(value);
+  return String(value)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function isValidEmail(value: unknown) {
@@ -344,67 +348,128 @@ function buildClientEmailHtml(orderData: any, items: any[], grandTotal: number) 
 }
 
 export async function POST(req: Request) {
+  const actor = await getCommunicationActor();
+  if (!actor) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  if (!isSameOrigin(req)) return NextResponse.json({ success: false, error: "Invalid origin" }, { status: 403 });
+
+  const input = await req.json().catch(() => null);
+  const orderId = typeof input?.orderId === "string" ? input.orderId.trim() : "";
+  if (!orderId || orderId.length > 100) return NextResponse.json({ success: false, error: "Valid order ID required" }, { status: 400 });
+
+  // The browser supplies only a reference. All email content and recipients come from the saved order.
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, ...(actor.role === "DISTRIBUTOR" ? { distributorId: actor.distributorId! } : {}) },
+    include: {
+      distributor: { include: { user: { select: { email: true } } } },
+      items: { include: {
+        product: { select: { sku: true, name: true, collection: true } },
+        variant: { select: { sizeLabel: true } },
+      } },
+    },
+  });
+  if (!order) return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 });
+  if (order.status === "CANCELLED") return NextResponse.json({ success: false, error: "Order is cancelled" }, { status: 409 });
+  if (!order.items.length || order.items.length > 100) return NextResponse.json({ success: false, error: "Invalid order items" }, { status: 400 });
+  if (actor.role === "DISTRIBUTOR" && Date.now() - order.createdAt.getTime() > 60 * 60 * 1000) {
+    return NextResponse.json({ success: false, error: "Order notification window expired" }, { status: 409 });
+  }
+
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const smtpPort = Number(process.env.SMTP_PORT || 465);
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const adminEmail = process.env.ADMIN_ORDER_EMAIL || smtpUser;
+  if (!smtpUser || !smtpPass || !adminEmail) {
+    return NextResponse.json({ success: false, error: "Email sender is not configured" }, { status: 503 });
+  }
+  const now = new Date();
+  const lockExpired = new Date(now.getTime() - 5 * 60 * 1000);
+  const claimed = await prisma.order.updateMany({
+    where: {
+      id: order.id,
+      OR: [
+        { emailNotificationState: { in: ["NOT_SENT", "FAILED"] } },
+        { emailNotificationState: "PROCESSING", emailNotificationRequestedAt: { lt: lockExpired } },
+      ],
+    },
+    data: { emailNotificationState: "PROCESSING", emailNotificationRequestedAt: now },
+  });
+  if (claimed.count !== 1) {
+    return NextResponse.json({ success: true, alreadyProcessed: true });
+  }
+
   try {
-    const orderData = await req.json();
+    let meta: Record<string, any> = {};
+    try {
+      const parsed = JSON.parse(order.notes || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) meta = parsed;
+    } catch { /* Legacy notes may not be structured */ }
 
-    const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
-    const smtpPort = Number(process.env.SMTP_PORT || 465);
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const adminEmail = process.env.ADMIN_ORDER_EMAIL || smtpUser;
-
-    if (!smtpUser || !smtpPass || !adminEmail) {
-      return NextResponse.json(
-        { success: false, error: "Email environment variables are missing." },
-        { status: 500 }
-      );
-    }
-
-    const items = Array.isArray(orderData.items)
-      ? orderData.items
-      : Array.isArray(orderData.orderItems)
-        ? orderData.orderItems
-        : [];
-
-    const grandTotal = calculateGrandTotal(orderData, items);
+    const items = order.items.map(line => {
+      const detail = Array.isArray(meta.itemsMeta)
+        ? meta.itemsMeta.find((x: any) => x.variantId === line.variantId && Number(x.qty) === line.qty)
+        : null;
+      return {
+        collection: line.product?.collection || "",
+        sku: line.product?.sku || "",
+        productName: line.product?.name || "Product",
+        size: line.variant?.sizeLabel || "",
+        unit: ["SHEET", "SQFT", "SQM"].includes(detail?.unit) ? detail.unit : "SHEET",
+        qty: line.qty, unitPrice: line.unitPrice,
+        total: line.qty * line.unitPrice,
+      };
+    });
+    const money = (value: unknown) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const itemsTotal = items.reduce((sum, line) => sum + line.total, 0);
+    const freight = money(meta.freight);
+    const insurance = money(meta.insurance);
+    const discount = money(meta.discount);
+    const otherCharge = money(meta.otherCharge);
+    const grandTotal = Math.max(0, itemsTotal + freight + insurance + otherCharge - discount);
+    const recipient = order.distributor.user.email || order.distributor.email || "";
+    const poNumber = String(meta.poNumber || "Order " + order.id.slice(-6)).replace(/[\r\n]/g, " ").slice(0, 100);
+    const orderData = {
+      ...meta,
+      poNumber,
+      currency: /^[A-Z]{3}$/.test(String(meta.currency || "").toUpperCase()) ? String(meta.currency).toUpperCase() : order.distributor.defaultCurrency,
+      signerName: meta.signerName || order.distributor.name,
+      orderEmail: recipient,
+      itemsTotal, freight, insurance, discount, otherCharge, grandTotal,
+    };
 
     const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
+      host: smtpHost, port: smtpPort, secure: smtpPort === 465,
+      auth: { user: smtpUser, pass: smtpPass },
+      connectionTimeout: 15000, socketTimeout: 30000,
     });
-
-    await transporter.sendMail({
-      from: `"Casadenza Distributor App" <${smtpUser}>`,
-      to: adminEmail,
-      subject: `New Distributor Order Received${orderData.poNumber ? ` - ${orderData.poNumber}` : ""}`,
-      html: buildAdminEmailHtml(orderData, items, grandTotal),
-    });
-
-    const clientEmail = safeText(
-      orderData.orderEmail || orderData.signerEmail || orderData.clientEmail
-    ).trim();
-
-    if (isValidEmail(clientEmail)) {
+    if (!order.emailNotificationAdminSentAt) {
       await transporter.sendMail({
-        from: `"Casadenza" <${smtpUser}>`,
-        to: clientEmail,
+        from: '"Casadenza Distributor App" <' + smtpUser + '>',
+        to: adminEmail,
+        subject: "New Distributor Order Received - " + poNumber,
+        html: buildAdminEmailHtml(orderData, items, grandTotal),
+      });
+      await prisma.order.update({ where: { id: order.id }, data: { emailNotificationAdminSentAt: new Date() } });
+    }
+    if (!order.emailNotificationDistributorSentAt && isValidEmail(recipient)) {
+      await transporter.sendMail({
+        from: '"Casadenza" <' + smtpUser + '>',
+        to: recipient,
         replyTo: smtpUser,
-        subject: `Your Casadenza Order Has Been Received${orderData.poNumber ? ` - ${orderData.poNumber}` : ""}`,
+        subject: "Your Casadenza Order Has Been Received - " + poNumber,
         html: buildClientEmailHtml(orderData, items, grandTotal),
       });
+      await prisma.order.update({ where: { id: order.id }, data: { emailNotificationDistributorSentAt: new Date() } });
     }
-
-    return NextResponse.json({ success: true });
+    await prisma.order.update({ where: { id: order.id }, data: { emailNotificationState: "SENT" } });
+    return NextResponse.json({ success: true, notifiedDistributor: isValidEmail(recipient) });
   } catch (error) {
-    console.error("Order email error:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to send order email." },
-      { status: 500 }
-    );
+    console.error("Order notification failed", error);
+    await prisma.order.update({ where: { id: order.id }, data: { emailNotificationState: "FAILED" } })
+      .catch(() => console.error("Unable to mark order notification failed"));
+    return NextResponse.json({ success: false, error: "Order saved, but email notification failed" }, { status: 503 });
   }
 }

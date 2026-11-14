@@ -1,0 +1,77 @@
+name: Distributor communications validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/responsive-communications-centre]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Prisma + TypeScript + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Type-check the application
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint -- --no-cache
+
+  migration-smoke:
+    name: PostgreSQL migration smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: casadenza_ci
+          POSTGRES_USER: casadenza
+          POSTGRES_PASSWORD: ci_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U casadenza -d casadenza_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://casadenza:ci_test_password@localhost:5432/casadenza_ci?schema=public
+      DIRECT_URL: postgresql://casadenza:ci_test_password@localhost:5432/casadenza_ci?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply all Prisma migrations to disposable PostgreSQL
+        run: npx prisma migrate deploy
+      - name: Check communication tables and Zoho Account column
+        run: |
+          node - <<'NODE'
+          const { PrismaClient } = require("@prisma/client");
+          (async () => {
+            const prisma = new PrismaClient();
+            try {
+              await prisma.distributor.count({ where: { zohoAccountId: { not: null } } });
+              await prisma.communicationThread.count();
+              await prisma.communicationMessage.count();
+              console.log("Migration schema smoke test passed");
+            } finally {
+              await prisma.$disconnect();
+            }
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
