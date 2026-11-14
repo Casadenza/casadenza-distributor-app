@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (!session || (role !== "ADMIN" && role !== "ORDER_ADMIN")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const alex = gmailMailboxStatus().find(m => m.mailbox === "alex");
+  const alex = (await gmailMailboxStatus()).find(m => m.mailbox === "alex");
   if (!alex?.configured) return NextResponse.json({
     ok: false, connected: false, items: [], error: "Connect alex@casadenza.in with read-only Gmail OAuth for this Preview."
   }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
