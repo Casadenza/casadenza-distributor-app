@@ -44,7 +44,8 @@ function capture(line:string,regex:RegExp):string{
 }
 export function parseForwarderReport(sender:string,subject:string,body:string){
  const from=sender.toLowerCase();
- if(!/([@.]orangestar\.co\.in)\b/.test(from))return null;
+ const domain=from.match(/[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z]{2,})/i)?.[1]?.toLowerCase();
+ if(domain!=="orangestar.co.in")return null;
  // Only the newest authored content; quoted history can contain stale ETDs/ETAs.
  const fresh=body.split(/(?:^|\n)(?:From:|Sent:|On .{3,100} wrote:|_{6,}|={8,})/im)[0].slice(0,9000);
  const header=[subject,fresh].join("\n");
