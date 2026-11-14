@@ -18,7 +18,7 @@ export default function OrderTargetScan({orders}:{orders:OrderChoice[]}) {
       });
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||"Unable to search Gmail");
-      setResult("Inspected "+data.messagesInspected+" unique emails; "+data.matchedCandidates+
+      setResult("Inspected "+data.messagesInspected+" unique emails and extracted text from "+data.pdfsParsed+" PDFs; "+data.matchedCandidates+
         " proposed document/order matches; "+data.added+" newly queued. No documents shared. Refresh to see the queue.");
     }catch(e){setResult(e instanceof Error?e.message:"Search failed");}
     finally{setBusy(false);}
