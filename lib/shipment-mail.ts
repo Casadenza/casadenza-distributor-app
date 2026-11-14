@@ -220,3 +220,41 @@ export async function searchAlexOrderInbox(): Promise<OrderEmailCandidate[]> {
   }));
   return messages.filter((m): m is OrderEmailCandidate => m !== null);
 }
+
+/**
+ * Read-only background intake candidate detection.
+ * Returns Gmail metadata and attachment inventory, never creates a portal order
+ * or publishes any document.
+ */
+export type IntakeMessage = {
+  mailbox: ShipmentMailbox;
+  messageId: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
+  pdfs: { partId: string; filename: string; size: number }[];
+};
+export async function scanRecentMailbox(mailbox: ShipmentMailbox): Promise<IntakeMessage[]> {
+  const token = await getAccessToken(mailbox);
+  const q = mailbox === "info"
+    ? '-in:spam -in:trash newer_than:21d has:attachment filename:pdf'
+    : '-in:spam -in:trash newer_than:21d {subject:"purchase order" subject:"new order" subject:"PO" filename:pdf}';
+  const list = await gmailGet<ListResponse>(token, "messages?" +
+    new URLSearchParams({ q, maxResults: "35" }));
+  const messages = await Promise.all((list.messages || []).slice(0, 35).map(async ({ id }) => {
+    if (!validMessageId(id)) return null;
+    try {
+      const data = await gmailGet<GmailMessage>(token, "messages/" + encodeURIComponent(id) + "?format=full");
+      const headers = data.payload?.headers || [];
+      const header = (name: string) => headers.find(h => h.name.toLowerCase() === name)?.value || "";
+      return {
+        mailbox, messageId: id, subject: header("subject").slice(0, 300),
+        from: header("from").slice(0, 250), date: header("date").slice(0, 140),
+        snippet: (data.snippet || "").slice(0, 420),
+        pdfs: collectPdfParts(data.payload),
+      };
+    } catch { return null; }
+  }));
+  return messages.filter((m): m is IntakeMessage => m !== null);
+}
