@@ -229,6 +229,20 @@ export async function searchAlexOrderInbox(): Promise<OrderEmailCandidate[]> {
  * Returns Gmail metadata and attachment inventory, never creates a portal order
  * or publishes any document.
  */
+function decodeInlineText(part: MailPart | undefined, depth=0): string {
+  if (!part || depth>5) return "";
+  if (part.mimeType==="text/plain" && part.body?.data) {
+    try {
+      return Buffer.from(part.body.data,"base64url").toString("utf8")
+        .replace(/[\\u0000-\\u001f]/g," ").replace(/\\s+/g," ").slice(0,2200);
+    }catch{return "";}
+  }
+  for (const child of part.parts||[]) {
+    const value=decodeInlineText(child,depth+1);
+    if(value)return value;
+  }
+  return "";
+}
 export type IntakeMessage = {
   mailbox: ShipmentMailbox;
   messageId: string;
@@ -248,7 +262,7 @@ export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { da
   const period = options?.afterEpochSeconds && Number.isSafeInteger(options.afterEpochSeconds)
     ? "after:" + options.afterEpochSeconds : "newer_than:" + days + "d";
   const q = '-in:spam -in:trash ' + period +
-    ' {subject:"purchase order" subject:"new order" subject:"order confirmation" subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking filename:invoice.pdf filename:packing.pdf}';
+    ' {subject:"purchase order" subject:"new order" subject:"order confirmation" subject:order subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking filename:invoice.pdf filename:packing.pdf}';
   const list = await gmailGet<ListResponse>(token, "messages?" +
     new URLSearchParams({ q, maxResults: String(limit) }));
   const messages = await Promise.all((list.messages || []).slice(0, limit).map(async ({ id }) => {
@@ -260,7 +274,7 @@ export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { da
       return {
         mailbox, messageId: id, subject: header("subject").slice(0, 300),
         from: header("from").slice(0, 250), date: header("date").slice(0, 140),
-        snippet: (data.snippet || "").slice(0, 420),
+        snippet: [data.snippet||"",decodeInlineText(data.payload)].filter(Boolean).join(" ").slice(0, 1800),
         pdfs: collectPdfParts(data.payload),
       };
     } catch { return null; }
