@@ -61,7 +61,7 @@ CREATE TABLE "PartnerRewardSale" (
   "verifiedBy" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "PartnerRewardSale_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "PartnerRewardSale_positive" CHECK ("netUsdCents" > 0)
+  CONSTRAINT "PartnerRewardSale_positive" CHECK ("netAmountCents" > 0)
 );
 CREATE UNIQUE INDEX "PartnerRewardLedger_sourceKey_key" ON "PartnerRewardLedger"("sourceKey");
 CREATE INDEX "PartnerRewardLedger_distributorId_createdAt_idx" ON "PartnerRewardLedger"("distributorId", "createdAt");
