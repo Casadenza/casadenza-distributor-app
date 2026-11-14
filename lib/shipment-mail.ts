@@ -1,7 +1,8 @@
+import { mailboxCredentials } from "@/lib/gmail-oauth";
 /**
  * Shipment email search is read-only: OAuth access is restricted to gmail.readonly.
  * The ChatGPT Gmail connections cannot be reused by the deployed portal.
- * Set the two mailbox refresh tokens in server-only Vercel environment variables.
+ * Refresh credentials are encrypted at rest after admin-approved Google OAuth.
  */
 export type ShipmentMailbox = "info" | "alex";
 type MailPart = {
@@ -29,12 +30,13 @@ const mailboxes: Record<ShipmentMailbox, { address: string; env: "GMAIL_REFRESH_
 };
 const cache = new Map<ShipmentMailbox, { token: string; expires: number }>();
 
-export function gmailMailboxStatus() {
+export async function gmailMailboxStatus() {
+  const connected = await mailboxCredentials();
   const client = !!(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET);
   return (Object.keys(mailboxes) as ShipmentMailbox[]).map((mailbox) => ({
     mailbox,
     address: mailboxes[mailbox].address,
-    configured: client && !!process.env[mailboxes[mailbox].env],
+    configured: client && (connected.has(mailbox) || !!process.env[mailboxes[mailbox].env]),
   }));
 }
 
@@ -69,7 +71,8 @@ async function getAccessToken(mailbox: ShipmentMailbox): Promise<string> {
   if (known && known.expires > Date.now()) return known.token;
   const clientId = process.env.GMAIL_CLIENT_ID;
   const secret = process.env.GMAIL_CLIENT_SECRET;
-  const refreshToken = process.env[mailboxes[mailbox].env];
+  const saved = await mailboxCredentials();
+  const refreshToken = saved.get(mailbox) || process.env[mailboxes[mailbox].env];
   if (!clientId || !secret || !refreshToken) throw authError("NOT_CONFIGURED");
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
