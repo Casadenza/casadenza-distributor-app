@@ -20,6 +20,53 @@ export async function GET(request: Request) {
     return NextResponse.json({error:"Search by a 3-90 character reference"},{status:400});
   }
   const mailboxes=gmailMailboxStatus();
+  // When the production cron is activated, the admin reads a persistent inbox.
+  // Simply opening this page no longer triggers Gmail polling.
+  const queueMode = process.env.VERCEL_ENV === "production" &&
+    process.env.AUTO_INBOX_SCAN_ENABLED === "true";
+  if (queueMode && !ref) {
+    try {
+      const [items, latestRun] = await Promise.all([
+        prisma.operationsInboxItem.findMany({
+          where:{reviewStatus:"PENDING"},
+          orderBy:[{receivedAt:"desc"},{firstSeenAt:"desc"}],
+          take:250,
+        }),
+        prisma.operationsInboxScanRun.findFirst({orderBy:{startedAt:"desc"}}),
+      ]);
+      const distributorIds=[...new Set(items.flatMap(i=>i.suggestedDistributorId?[i.suggestedDistributorId]:[]))];
+      const distributors=distributorIds.length
+        ? await prisma.distributor.findMany({where:{id:{in:distributorIds}},select:{id:true,name:true}})
+        : [];
+      const names=new Map(distributors.map(d=>[d.id,d.name]));
+      return NextResponse.json({
+        ok:true,mailboxes,queueMode:true,scanMode:"scheduled",
+        lastScanAt:latestRun?.startedAt?.toISOString()||null,
+        lastScanStatus:latestRun?.status||"NOT_RUN",
+        lastScanIssues:latestRun?.errorSummary||null,
+        items:items.map(i=>({
+          id:i.mailbox+":"+i.messageId+":"+i.partId,
+          queueItemId:i.id,
+          mailbox:i.mailbox,messageId:i.messageId,
+          partId:i.partId==="body"?null:i.partId,
+          filename:i.filename,subject:i.subject,from:i.sender,
+          date:i.receivedAt?.toISOString()||i.firstSeenAt.toISOString(),
+          snippet:i.snippet||"",kind:i.kind,state:i.matchState,
+          suggestedOrderId:i.suggestedOrderId,
+          suggestedDistributorId:i.suggestedDistributorId,
+          suggestedDistributorName:i.suggestedDistributorId?names.get(i.suggestedDistributorId)||null:null,
+          reason:i.matchReason,
+        })),
+        issues:[],scannedMessages:latestRun?.messagesScanned||0,
+        sharingEnabled:process.env.ENABLE_SHIPMENT_DOCUMENT_IMPORT==="true",
+        note:"Auto-scanned queue. Every attachment requires customer and order verification before sharing.",
+      },{headers:{"Cache-Control":"private, no-store"}});
+    } catch {
+      return NextResponse.json({ok:false,mailboxes,items:[],
+        error:"Scheduled inbox queue is not ready. Apply the approved migration before activation."},
+        {status:503,headers:{"Cache-Control":"private, no-store"}});
+    }
+  }
   const configured=mailboxes.filter(m=>m.configured);
   if (!configured.length) return NextResponse.json({
     ok:true,mailboxes,items:[],issues:[],
