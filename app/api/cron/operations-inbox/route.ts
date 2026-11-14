@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       process.env.AUTO_INBOX_SCAN_ENABLED !== "true") {
     return json({ok:false,active:false,reason:"Scheduled inbox scanning not enabled for this environment."},503);
   }
-  const mailboxes = gmailMailboxStatus();
+  const mailboxes = await gmailMailboxStatus();
   if (mailboxes.length !== 2 || mailboxes.some(m=>!m.configured)) {
     return json({ok:false,active:false,reason:"Both info and Alex Gmail OAuth credentials must be configured."},503);
   }
