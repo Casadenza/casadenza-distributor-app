@@ -6,7 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const session = await getServerSession();
-  if (!session || (session.role !== "ADMIN" && session.role !== "ORDER_ADMIN")) {
+  const role = String(session?.role || "");
+  if (!session || (role !== "ADMIN" && role !== "ORDER_ADMIN")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const alex = gmailMailboxStatus().find(m => m.mailbox === "alex");
