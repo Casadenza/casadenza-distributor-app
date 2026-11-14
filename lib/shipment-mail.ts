@@ -248,7 +248,7 @@ export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { da
   const period = options?.afterEpochSeconds && Number.isSafeInteger(options.afterEpochSeconds)
     ? "after:" + options.afterEpochSeconds : "newer_than:" + days + "d";
   const q = '-in:spam -in:trash ' + period +
-    ' {filename:pdf subject:"purchase order" subject:"new order" subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking}';
+    ' {subject:"purchase order" subject:"new order" subject:"order confirmation" subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking filename:invoice.pdf filename:packing.pdf}';
   const list = await gmailGet<ListResponse>(token, "messages?" +
     new URLSearchParams({ q, maxResults: String(limit) }));
   const messages = await Promise.all((list.messages || []).slice(0, limit).map(async ({ id }) => {
