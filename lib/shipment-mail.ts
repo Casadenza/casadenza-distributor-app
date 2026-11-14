@@ -235,15 +235,17 @@ export type IntakeMessage = {
   snippet: string;
   pdfs: { partId: string; filename: string; size: number }[];
 };
-export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { days?: number; limit?: number }): Promise<IntakeMessage[]> {
+export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { days?: number; limit?: number; afterEpochSeconds?: number }): Promise<IntakeMessage[]> {
   const token = await getAccessToken(mailbox);
   // Both mailboxes have identical intake coverage: orders, invoices,
   // packing lists, AWB/HAWB, shipping documents and related messages.
   // Do not assign document categories to specific email addresses.
   const days = options?.days && Number.isInteger(options.days) ? Math.min(30, Math.max(1, options.days)) : 21;
   const limit = options?.limit && Number.isInteger(options.limit) ? Math.min(100, Math.max(1, options.limit)) : 50;
-  const q = '-in:spam -in:trash newer_than:' + days +
-    'd {filename:pdf subject:"purchase order" subject:"new order" subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking}';
+  const period = options?.afterEpochSeconds && Number.isSafeInteger(options.afterEpochSeconds)
+    ? "after:" + options.afterEpochSeconds : "newer_than:" + days + "d";
+  const q = '-in:spam -in:trash ' + period +
+    ' {filename:pdf subject:"purchase order" subject:"new order" subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking}';
   const list = await gmailGet<ListResponse>(token, "messages?" +
     new URLSearchParams({ q, maxResults: String(limit) }));
   const messages = await Promise.all((list.messages || []).slice(0, limit).map(async ({ id }) => {
