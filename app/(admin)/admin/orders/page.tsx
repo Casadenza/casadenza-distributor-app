@@ -29,7 +29,7 @@ export default async function AdminOrdersPage() {
   });
 
   return (
-    <><div className="mb-3 flex flex-wrap justify-end"><Link className="inline-flex min-h-[42px] items-center rounded-xl bg-[#25211D] px-4 text-[12px] font-semibold text-white" href="/admin/order-intake">Review emailed purchase orders</Link></div><OrdersAdminClient
+    <><div className="mb-3 flex flex-wrap justify-end"><Link className="inline-flex min-h-[42px] items-center rounded-xl bg-[#25211D] px-4 text-[12px] font-semibold text-white" href="/admin/operations">Review incoming orders & shipment documents</Link></div><OrdersAdminClient
       initialItems={items as any}
       userRole={role}
     /></>
