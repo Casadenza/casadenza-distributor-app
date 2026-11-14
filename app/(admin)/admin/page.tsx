@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { 
   ArrowUpRight, Package, Users, BadgeDollarSign, 
   Sparkles, GraduationCap, Palette, 
-  Calculator, Files, LifeBuoy, Clock, Mail, Plane, ClipboardList 
+  Calculator, Files, LifeBuoy, Clock, Mail, Plane, ClipboardList, Gift 
 } from "lucide-react";
 
 // --- CLASSIC COMPACT METRIC ---
@@ -82,6 +82,7 @@ export default async function AdminDashboard() {
           {/* Main Action Modules */}
           <SlimAction title="Orders Hub" desc="Order Pipeline & Status" href="/admin/orders" icon={Clock} />
           <SlimAction title="Email Order Intake" desc="Alex Mailbox PO Review" href="/admin/order-intake" icon={ClipboardList} />
+          <SlimAction title="Partner Rewards" desc="Points, Activities & Redemptions" href="/admin/rewards" icon={Gift} />
           <SlimAction title="Communications Centre" desc="Distributor Messages & Replies" href="/admin/communications" icon={Mail} />
           <SlimAction title="Products" desc="Catalog Management" href="/admin/products" icon={Package} />
           <SlimAction title="Price Matrix" desc="Pricing Tiers" href="/admin/prices" icon={BadgeDollarSign} />
