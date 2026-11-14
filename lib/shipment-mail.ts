@@ -25,7 +25,7 @@ type ProfileResponse = { emailAddress?: string };
 export const MAX_SHIPMENT_PDF_BYTES = 10 * 1024 * 1024;
 const mailboxes: Record<ShipmentMailbox, { address: string; env: "GMAIL_REFRESH_TOKEN_INFO" | "GMAIL_REFRESH_TOKEN_ALEX" }> = {
   info: { address: "info@casadenza.com", env: "GMAIL_REFRESH_TOKEN_INFO" },
-  alex: { address: "alex@casadenza.com", env: "GMAIL_REFRESH_TOKEN_ALEX" },
+  alex: { address: "alex@casadenza.in", env: "GMAIL_REFRESH_TOKEN_ALEX" },
 };
 const cache = new Map<ShipmentMailbox, { token: string; expires: number }>();
 
