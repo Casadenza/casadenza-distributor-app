@@ -28,5 +28,10 @@ export default async function Page() {
     take: 800,
   });
 
-  return <AdminDocumentsClient initialOrders={orders as any} />;
+  const proposals=await prisma.operationsInboxItem.findMany({
+    where:{mailbox:"info",reviewStatus:"PENDING",suggestedOrderId:{not:null}},
+    select:{id:true,suggestedOrderId:true,kind:true,filename:true,subject:true,matchReason:true,receivedAt:true},
+    orderBy:{receivedAt:"desc"},take:700,
+  });
+  return <AdminDocumentsClient initialOrders={orders as any} internalProposals={proposals} />;
 }
