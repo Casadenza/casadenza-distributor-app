@@ -9,7 +9,7 @@ import { CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck } from "lucide-rea
 export const dynamic = "force-dynamic";
 
 async function statusInfo() {
-  const gmailMailboxes = gmailMailboxStatus();
+  const gmailMailboxes = await gmailMailboxStatus().catch(() => []);
   const env = {
     zoho: zohoConfigured(),
     cloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
