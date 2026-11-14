@@ -58,7 +58,7 @@ export default function PreviewClient({orders,matches,queueCount,unmatchedCount}
               docs.map(d=><div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3" key={d.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <strong className="text-sm">{label[d.kind]||d.kind}</strong>
-                  <span className="text-xs text-amber-900">Proposed · score {d.confidence}/100</span>
+                  <span className="text-xs text-amber-900">{d.confidence>0?"Proposed · score "+d.confidence+"/100":"Prior proposal · revalidation needed"}</span>
                 </div>
                 <p className="mt-1 text-sm">{d.filename}</p>
                 <p className="text-xs text-stone-600">{d.subject}</p>
