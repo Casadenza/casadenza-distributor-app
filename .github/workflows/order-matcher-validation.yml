@@ -1,0 +1,53 @@
+name: Order and shipment matching validation
+on:
+  pull_request:
+    paths:
+      - 'lib/operations-matcher.ts'
+      - 'lib/shipment-mail.ts'
+      - 'lib/shipment-pdf-text.ts'
+      - 'app/(admin)/admin/operations/**'
+      - 'app/api/admin/operations/**'
+      - 'tests/operations-matcher.test.mjs'
+      - 'tests/order-document-folders.test.mjs'
+      - 'tests/document-readiness.test.mjs'
+      - 'tests/order-shipment.test.mjs'
+      - 'lib/order-shipment.ts'
+      - 'app/api/admin/orders/**'
+      - 'lib/order-document-completeness.ts'
+      - 'lib/order-document-folders.ts'
+      - 'components/documents/**'
+      - 'app/(admin)/admin/documents/**'
+      - 'app/dashboard/documents/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/order-matcher-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npm run test:order-matcher
+      - run: node --experimental-strip-types --test tests/order-document-folders.test.mjs
+      - run: node --experimental-strip-types --test tests/document-readiness.test.mjs
+      - run: node --experimental-strip-types --test tests/order-shipment.test.mjs
+      - run: npx tsc --noEmit
+      - run: npm run lint -- --no-cache
+      - name: Full Next.js preview build without production credentials
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/test
+          DIRECT_URL: postgresql://test:test@127.0.0.1:5432/test
+          SESSION_SECRET: this-is-a-ci-placeholder-never-used-in-production-0123456789
+          NEXT_TELEMETRY_DISABLED: "1"

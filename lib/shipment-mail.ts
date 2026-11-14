@@ -229,6 +229,20 @@ export async function searchAlexOrderInbox(): Promise<OrderEmailCandidate[]> {
  * Returns Gmail metadata and attachment inventory, never creates a portal order
  * or publishes any document.
  */
+function decodeInlineText(part: MailPart | undefined, depth=0): string {
+  if (!part || depth>5) return "";
+  if (part.mimeType==="text/plain" && part.body?.data) {
+    try {
+      return Buffer.from(part.body.data,"base64url").toString("utf8")
+        .replace(/\s+/g," ").slice(0,2200);
+    }catch{return "";}
+  }
+  for (const child of part.parts||[]) {
+    const value=decodeInlineText(child,depth+1);
+    if(value)return value;
+  }
+  return "";
+}
 export type IntakeMessage = {
   mailbox: ShipmentMailbox;
   messageId: string;
@@ -236,7 +250,7 @@ export type IntakeMessage = {
   from: string;
   date: string;
   snippet: string;
-  pdfs: { partId: string; filename: string; size: number }[];
+  pdfs: { partId: string; filename: string; size: number; text?: string }[];
 };
 export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { days?: number; limit?: number; afterEpochSeconds?: number }): Promise<IntakeMessage[]> {
   const token = await getAccessToken(mailbox);
@@ -248,7 +262,7 @@ export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { da
   const period = options?.afterEpochSeconds && Number.isSafeInteger(options.afterEpochSeconds)
     ? "after:" + options.afterEpochSeconds : "newer_than:" + days + "d";
   const q = '-in:spam -in:trash ' + period +
-    ' {filename:pdf subject:"purchase order" subject:"new order" subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking}';
+    ' {subject:"purchase order" subject:"new order" subject:"order confirmation" subject:order subject:PO subject:invoice subject:proforma subject:AWB subject:HAWB subject:waybill subject:"packing list" subject:shipment subject:dispatch subject:tracking filename:invoice.pdf filename:packing.pdf}';
   const list = await gmailGet<ListResponse>(token, "messages?" +
     new URLSearchParams({ q, maxResults: String(limit) }));
   const messages = await Promise.all((list.messages || []).slice(0, limit).map(async ({ id }) => {
@@ -260,7 +274,7 @@ export async function scanRecentMailbox(mailbox: ShipmentMailbox, options?: { da
       return {
         mailbox, messageId: id, subject: header("subject").slice(0, 300),
         from: header("from").slice(0, 250), date: header("date").slice(0, 140),
-        snippet: (data.snippet || "").slice(0, 420),
+        snippet: [data.snippet||"",decodeInlineText(data.payload)].filter(Boolean).join(" ").slice(0, 1800),
         pdfs: collectPdfParts(data.payload),
       };
     } catch { return null; }
@@ -291,4 +305,52 @@ export async function searchOperationsMailbox(mailbox: ShipmentMailbox, referenc
     } catch { return null; }
   }));
   return messages.filter((m): m is IntakeMessage => m !== null);
+}
+
+/** Read-only forwarding-agent updates for a specific existing order.
+ * Matches explicit order/booking/invoice references; never promotes an update
+ * to customer-visible shipment data automatically.
+ */
+export type ForwarderMailReport={messageId:string;subject:string;from:string;date:string;body:string;filenames:string[]};
+export async function searchOrangestarReports(mailbox:ShipmentMailbox,references:string[]):Promise<ForwarderMailReport[]>{
+ const refs=[...new Set(references.map(s=>s.trim()).filter(s=>s.length>=4&&s.length<=80))].slice(0,4);
+ if(!refs.length)return [];
+ const token=await getAccessToken(mailbox);
+ const lists=await Promise.allSettled(refs.map(async ref=>{
+   const safe=ref.replace(/[\r\n"\\]/g," ");
+   const q='-in:trash -in:spam from:(orangestar.co.in) "'+safe+'"';
+   const result=await gmailGet<ListResponse>(token,"messages?"+new URLSearchParams({q,maxResults:"20"}));
+   return result.messages||[];
+ }));
+ const ids=[...new Set(lists.flatMap(x=>x.status==="fulfilled"?x.value.map(z=>z.id):[]))]
+   .filter(validMessageId).slice(0,45);
+ const details=await Promise.all(ids.map(async id=>{
+  try{
+   const data=await gmailGet<GmailMessage>(token,"messages/"+encodeURIComponent(id)+"?format=full");
+   const h=data.payload?.headers||[];
+   const header=(name:string)=>h.find(x=>x.name.toLowerCase()===name)?.value||"";
+   const from=header("from").slice(0,240);
+   // Verify the actual From domain before treating as an Orangestar candidate.
+   const senderDomain=from.match(/[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z]{2,})/i)?.[1]?.toLowerCase();
+   if(senderDomain!=="orangestar.co.in")return null;
+   const bodyPart=(part:MailPart|undefined,depth=0):string=>{
+    if(!part||depth>5)return "";
+    if(part.mimeType==="text/plain"&&part.body?.data)try{
+      return Buffer.from(part.body.data,"base64url").toString("utf8").slice(0,15000);
+    }catch{return "";}
+    for(const child of part.parts||[]){
+      const value=bodyPart(child,depth+1);if(value)return value;
+    }
+    return "";
+   };
+   const body=bodyPart(data.payload)||data.snippet||"";
+   const filenames=collectPdfParts(data.payload).map(x=>x.filename);
+   const searchText=header("subject")+" "+body+" "+filenames.join(" ");
+   const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,"");
+   if(!refs.some(ref=>normalize(searchText).includes(normalize(ref))))return null;
+   return {messageId:id,subject:header("subject").slice(0,300),from,
+     date:header("date").slice(0,120),body:body.slice(0,9000),filenames};
+  }catch{return null;}
+ }));
+ return details.filter((x):x is ForwarderMailReport=>x!==null);
 }

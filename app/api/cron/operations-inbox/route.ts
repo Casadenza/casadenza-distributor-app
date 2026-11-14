@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     });
     const previous=[priorInfo];
     const now=Date.now();
-    const backfillDays=3;
+    const backfillDays=30;
     const overlapMs=30*60*1000;
     const oldestAllowed=now-backfillDays*24*60*60*1000;
     const gaps=previous.flatMap((p,i)=>p&&p.startedAt.getTime()<oldestAllowed
@@ -76,7 +76,8 @@ export async function GET(request: Request) {
     const [orders, scanResults] = await Promise.all([
       prisma.order.findMany({
         select:{id:true,distributorId:true,createdAt:true,notes:true,
-          distributor:{select:{name:true,country:true}}},
+          distributor:{select:{name:true,country:true,email:true,billingName:true}},
+          items:{select:{qty:true}}},
         orderBy:{createdAt:"desc"},take:1500,
       }),
       Promise.allSettled(
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
           const previousAt=previous[i]?.startedAt.getTime();
           const afterEpochSeconds=previousAt
             ? Math.floor(Math.max(oldestAllowed,previousAt-overlapMs)/1000):undefined;
-          return scanRecentMailbox(m.mailbox as ShipmentMailbox,{days:backfillDays,limit:80,afterEpochSeconds});
+          return scanRecentMailbox(m.mailbox as ShipmentMailbox,{days:backfillDays,limit:100,afterEpochSeconds});
         })
       ),
     ]);
@@ -98,6 +99,8 @@ export async function GET(request: Request) {
         invoiceNumber:String(notes.invoiceNumber||notes.invoiceNo||""),
         buyerPoRef:String(notes.buyerPoRef||""),
         date:o.createdAt.toISOString().slice(0,10),
+        distributorEmail:o.distributor.email||"",billingName:o.distributor.billingName||"",
+        quantity:o.items.reduce((n,i)=>n+i.qty,0),
       };
     });
     const allMessages=scanResults.flatMap(s=>s.status==="fulfilled"?s.value:[]);
@@ -115,7 +118,7 @@ export async function GET(request: Request) {
     const issueCodes=scanResults.flatMap((s,i)=>s.status==="rejected"
       ? [mailboxes[i].mailbox+":"+(s.reason instanceof Error && /^GMAIL_[A-Z_]+$/.test(s.reason.message)
         ? s.reason.message:"SCAN_FAILED")] : []);
-    const partialMailbox=scanResults.some(s=>s.status==="fulfilled"&&s.value.length>=80);
+    const partialMailbox=scanResults.some(s=>s.status==="fulfilled"&&s.value.length>=100);
     if(issueCodes.length) console.error("Operations inbox scan issue codes",issueCodes);
     const status=issueCodes.length===mailboxes.length?"FAILED":(issueCodes.length>0||partialMailbox||gaps.length>0?"PARTIAL":"SUCCESS");
     await prisma.operationsInboxScanRun.update({
@@ -123,7 +126,7 @@ export async function GET(request: Request) {
       data:{status,infoStatus:scanResults[0]?.status==="fulfilled"?"SUCCESS":"FAILED",
         alexStatus:"SKIPPED",
         messagesScanned:allMessages.length,itemsAdded:added.count,
-        errorSummary:[...issueCodes,...gaps,...(partialMailbox?["The info inbox hit the 80-message scan cap; increase capacity if this persists."]:[])].join("; ")||null,
+        errorSummary:[...issueCodes,...gaps,...(partialMailbox?["The info inbox hit the 100-message scan cap; increase capacity if this persists."]:[])].join("; ")||null,
         completedAt:new Date()},
     });
     console.info("Operations inbox scan", {slot,status,messages:allMessages.length,candidates:rows.length,added:added.count});

@@ -1,6 +1,12 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import OrderFolderControls from "@/components/documents/order-folder-controls";
+import DocumentReadinessIndicator from "@/components/documents/document-readiness";
+import OrderShipmentPanel from "@/components/documents/order-shipment-panel";
+import {documentReadiness,missingDocumentCount} from "@/lib/order-document-completeness";
+import OrderFolderTabs from "@/components/documents/order-folder-tabs";
+import {filterFolderOrders,INITIAL_FOLDER_FILTERS,documentFolder,orderCurrency,orderValue,type FolderFilters,type FolderKind} from "@/lib/order-document-folders";
 import {
   Search,
   RefreshCw,
@@ -255,10 +261,14 @@ export default function DocumentsClient({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [q, setQ] = useState("");
+  const [folderFilters,setFolderFilters]=useState<FolderFilters>(INITIAL_FOLDER_FILTERS);
+  const [missingOnly,setMissingOnly]=useState(false);
+  const [folderByOrder,setFolderByOrder]=useState<Record<string,"ALL"|FolderKind>>({});
   const [docType, setDocType] = useState("ALL");
 
   const filtered = useMemo(() => {
-    return orders.filter((o) => {
+    return filterFolderOrders(orders,folderFilters).filter((o) => {
+      if(missingOnly && documentReadiness(o).state!=="INCOMPLETE")return false;
       const meta = safeParseNotes(o.notes) || {};
       const po = meta?.poNumber
         ? `PO-${meta.poNumber}`
@@ -278,7 +288,7 @@ export default function DocumentsClient({
 
       return true;
     });
-  }, [orders, q, docType]);
+  }, [orders, q, docType, folderFilters,missingOnly]);
 
   const docTypeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -297,7 +307,7 @@ export default function DocumentsClient({
               <div className="h-8 w-1 rounded-full bg-indigo-600" />
               <div>
                 <h1 className="text-lg font-bold tracking-tight text-slate-900">
-                  Document Management
+                  Order Documents
                 </h1>
                 <p className="mt-0.5 text-[11px] text-slate-500">
                   Distributor documents and order files
@@ -340,6 +350,11 @@ export default function DocumentsClient({
         </header>
 
         <main className="mx-auto max-w-[1440px] px-6 py-8">
+          <OrderFolderControls filters={folderFilters} setFilters={setFolderFilters} orders={orders} admin={false}/>
+      <div className="mx-4 my-2 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <span><strong>{missingDocumentCount(orders)}</strong> orders have outstanding baseline documents (based on their current workflow status).</span>
+        <label className="inline-flex items-center gap-2"><input type="checkbox" checked={missingOnly} onChange={e=>setMissingOnly(e.target.checked)}/>Show incomplete only</label>
+      </div>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Filter size={14} className="text-slate-400" />
@@ -381,6 +396,7 @@ export default function DocumentsClient({
                     : `ORD-${String(o.id).slice(-6)}`;
                   const isExpanded = !!expanded[o.id];
                   const docs = (o?.documents || []) as any[];
+                  const visibleDocs=docs.filter(d=>!folderByOrder[o.id]||folderByOrder[o.id]==="ALL"||documentFolder(d)===folderByOrder[o.id]);
                   const statusText = String(o.status || "Pending");
 
                   return (
@@ -402,6 +418,7 @@ export default function DocumentsClient({
                             <span className="text-sm font-bold text-slate-800">
                               {po}
                             </span>
+                            <span className="text-[10px] text-stone-500">{orderCurrency(o)} {orderValue(o).toLocaleString("en-IN",{maximumFractionDigits:2})}</span>
                           </div>
                         </td>
 
@@ -445,9 +462,12 @@ export default function DocumentsClient({
                             colSpan={5}
                             className="border-b border-slate-200 px-8 py-6"
                           >
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                              {docs.length > 0 ? (
-                                docs.map((d) => (
+                            <DocumentReadinessIndicator order={o}/>
+                            <OrderShipmentPanel orderId={o.id} notes={o.notes} admin={false}/>
+                            <OrderFolderTabs documents={docs} selected={folderByOrder[o.id]||"ALL"} onSelect={folder=>setFolderByOrder(prev=>({...prev,[o.id]:folder}))}/>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
+                              {visibleDocs.length > 0 ? (
+                                visibleDocs.map((d) => (
                                   <div
                                     key={d.id}
                                     className="flex flex-col rounded-lg border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-200/5 transition-all hover:ring-indigo-100"

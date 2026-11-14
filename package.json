@@ -12,7 +12,8 @@
     "prisma:migrate:dev": "npx prisma migrate dev",
     "prisma:migrate:deploy": "npx prisma migrate deploy",
     "prisma:studio": "npx prisma studio",
-    "seed": "npx ts-node prisma/seed.ts"
+    "seed": "npx ts-node prisma/seed.ts",
+    "test:order-matcher": "node --experimental-strip-types --test tests/operations-matcher.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.19.0",
@@ -28,7 +29,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "xlsx": "^0.18.5",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "pdf-parse": "1.1.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

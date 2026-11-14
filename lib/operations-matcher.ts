@@ -3,72 +3,161 @@ import type { IntakeMessage, ShipmentMailbox } from "@/lib/shipment-mail";
 export type OperationsOrder = {
   id: string; distributorId: string; distributorName: string; country: string | null;
   poNumber: string; invoiceNumber: string; buyerPoRef: string; date: string;
+  distributorEmail?: string; billingName?: string; quantity?: number;
 };
+export type DocumentKind = "PURCHASE_ORDER" | "INVOICE" | "PROFORMA_INVOICE" |
+  "SHIPPING_BILL" | "AWB_HAWB" | "PACKING_LIST" | "OTHER";
 export type OperationsCandidate = {
   id: string; mailbox: ShipmentMailbox; messageId: string; partId: string | null;
   filename: string | null; subject: string; from: string; date: string; snippet: string;
-  kind: "PURCHASE_ORDER" | "INVOICE" | "AWB_HAWB" | "PACKING_LIST" | "OTHER";
+  kind: DocumentKind;
   state: "POSSIBLE_ORDER_MATCH" | "NEEDS_REVIEW" | "MULTIPLE_MATCHES";
-  suggestedOrderId: string | null;
-  suggestedDistributorId: string | null;
-  suggestedDistributorName: string | null;
-  reason: string;
+  suggestedOrderId: string | null; suggestedDistributorId: string | null;
+  suggestedDistributorName: string | null; reason: string;
+  confidence: number; evidence: string[]; conflicts: string[];
 };
-function normalized(value: string) {
-  return (value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+function normalized(s: string) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+function canonicalText(s: string) { return (s || "").replace(/\s+/g, " ").toLowerCase(); }
+function emailOf(s: string) {
+  const m = (s || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return m ? m[0].toLowerCase() : "";
 }
-function classify(filename: string, subject: string) {
-  const file = (filename || "").toLowerCase();
-  const subj = (subject || "").toLowerCase();
-  if (/\b(hawb|mawb|awb|waybill|airwaybill|air waybill|bill of lading|bol|tracking)\b/i.test(file)) return "AWB_HAWB" as const;
-  if (/\b(packing|packlist|packinglist|pklist|p-list)\b/i.test(file)) return "PACKING_LIST" as const;
-  if (/\b(invoice|inv|commercial invoice|proforma|pi)\b/i.test(file)) return "INVOICE" as const;
-  if (/\b(purchase order|po|order form)\b/i.test(file)) return "PURCHASE_ORDER" as const;
-  if (/\b(hawb|mawb|awb|waybill|bill of lading|shipping|shipment)\b/i.test(subj)) return "AWB_HAWB" as const;
-  if (/\b(packing list|packing)\b/i.test(subj)) return "PACKING_LIST" as const;
-  if (/\b(invoice|proforma)\b/i.test(subj)) return "INVOICE" as const;
-  if (/\b(purchase order|\bpo\b|new order|order confirmation|order placed|customer order)\b/i.test(subj)) return "PURCHASE_ORDER" as const;
-  return "OTHER" as const;
+function termInText(term: string, text: string, minimum=6) {
+  const needle=canonicalText(term).replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+  const hay=" "+canonicalText(text).replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim()+" ";
+  return normalized(term).length>=minimum && hay.includes(" "+needle+" ");
 }
-/**
- * A suggested match is NOT a verified consignee or automatic publishing permission.
- * Only exact existing PO/invoice reference plus clear customer evidence is sufficient
- * for a suggestion; attached PDF content still needs verification.
- */
+function quantities(s: string): number[] {
+  const result: number[] = [];
+  for(const m of s.matchAll(/\b(\d{1,6})\s*(?:sheets?|pcs?|pieces?|panels?)\b/gi)) {
+    const n=Number(m[1]);
+    if(n>0) result.push(n);
+  }
+  return result;
+}
+export function classifyDocument(filename: string, subject: string, extractedText = ""): DocumentKind {
+  const file=canonicalText(filename), subj=canonicalText(subject), body=canonicalText(extractedText);
+  const all=file+" "+subj;
+  if(/\b(shipping[\s_-]?bill|ship[\s_-]?bill|shippingbill|sb\s*(?:no|number|\d{2,})|let export order)\b/.test(all)) return "SHIPPING_BILL";
+  if(/\b(pro[\s-]?forma|pi[\s_-]?(?:no|number|\d{2,}))\b/.test(all) || /(?:^|[\s_.-])pi(?:[\s_.-]|$)/.test(file)) return "PROFORMA_INVOICE";
+  if(/\b(hawb|mawb|awb|air[\s_-]?waybill|waybill|bill of lading|tracking|bol)\b/.test(all)) return "AWB_HAWB";
+  if(/\b(packing[\s_-]?list|packinglist|packlist|pklist|p[\s_-]?list)\b/.test(all)) return "PACKING_LIST";
+  if(/\b(commercial[\s_-]?invoice|invoice|inv[\s_-]?\d{2,})\b/.test(all)) return "INVOICE";
+  if(/\b(purchase[\s_-]?order|customer[\s_-]?order|new order|order confirmation|po[\s_-]?\d{2,})\b/.test(all)) return "PURCHASE_ORDER";
+  // PDF-only classification is only a fallback when the file/subject have no type.
+  if(/\bshipping bill\b/.test(body)) return "SHIPPING_BILL";
+  if(/\bproforma invoice\b/.test(body)) return "PROFORMA_INVOICE";
+  if(/\b(?:house air waybill|air waybill|hawb|awb)\b/.test(body)) return "AWB_HAWB";
+  if(/\bpacking list\b/.test(body)) return "PACKING_LIST";
+  if(/\bcommercial invoice\b/.test(body)) return "INVOICE";
+  if(/\bpurchase order\b/.test(body)) return "PURCHASE_ORDER";
+  return "OTHER";
+}
+const irrelevantFile=/\b(catalogue|catalog|brochure|newsletter|marketing|portfolio|presentation|resume|curriculum vitae|advertisement|bank statement|tax receipt|quotation template)\b/i;
+const orderSignal=/\b(new order|purchase order|customer order|order confirmation|please (?:place|process|book) (?:an? )?order|order placed|(?:we|i) (?:would like|want|wish) to order|please (?:supply|send|dispatch) \d+\s*(?:sheets?|panels?))\b/i;
+const shippingSignal=/\b(invoice|proforma|packing list|shipping bill|waybill|hawb|mawb|awb|tracking|shipment|dispatch|consignee|bill of lading)\b/i;
+function refMatch(ref: string, text: string) {
+  const chars=normalized(ref).split("");
+  if(chars.length<7||chars.length>60)return false;
+  const pattern="(^|[^a-z0-9])"+chars.join("[\\s./_-]*")+"(?=$|[^a-z0-9])";
+  return new RegExp(pattern,"i").test(text);
+}
+function scoreOrder(
+  o: OperationsOrder, m: IntakeMessage,
+  description: string, extractedText: string, kind: DocumentKind
+) {
+  const context=description+" "+extractedText;
+  const messageContext=m.subject+" "+m.snippet;
+  const explicitRefs=[o.poNumber,o.invoiceNumber,o.buyerPoRef].filter(Boolean);
+  const reference=explicitRefs.some(ref=>refMatch(ref,context));
+  const filenameRef=explicitRefs.some(ref=>refMatch(ref,description));
+  const customerName=[o.distributorName,o.billingName||""].some(s=>termInText(s,context,6));
+  const verifiedFrom=!!o.distributorEmail && emailOf(m.from)===o.distributorEmail.toLowerCase().trim();
+  const emailMention=!!o.distributorEmail && context.toLowerCase().includes(o.distributorEmail.toLowerCase().trim());
+  const customerEmail=verifiedFrom || emailMention;
+  const qty=Number(o.quantity||0);
+  const found=quantities(context);
+  const quantity=qty>0 && found.includes(qty);
+  const inDocument=quantities(extractedText);
+  const otherQuantity=qty>0 && ((inDocument.length>0 && !inDocument.includes(qty)) ||
+    (inDocument.length===0 && found.length>0 && !quantity));
+  const extractedBuyer=extractedText.match(/(?:buyer|consignee|bill to)\s*[:\-]\s*([^\r\n]{4,100})/i);
+  const buyer=extractedBuyer?.[1] || "";
+  const knownNames=[o.distributorName,o.billingName||""].filter(x=>normalized(x).length>=6);
+  const buyerConflict=!!buyer && knownNames.length>0 && !knownNames.some(n=>termInText(n,buyer,6));
+  // Buyer mismatch in a PDF cannot be erased by filename similarity.
+  const conflicts:string[]=[];
+  if(buyerConflict) conflicts.push("PDF buyer/consignee differs from distributor");
+  if(otherQuantity) conflicts.push("Sheet quantity differs from order");
+  const evidence:string[]=[];
+  if(reference) evidence.push("Exact PO/invoice reference");
+  if(filenameRef) evidence.push("Reference in filename/subject");
+  if(customerName) evidence.push("Customer name");
+  if(customerEmail) evidence.push("Customer email");
+  if(quantity) evidence.push("Sheet quantity");
+  if(extractedText) evidence.push("PDF text inspected");
+  const score=(reference?75:0)+(filenameRef?10:0)+(customerName?27:0)+
+    (customerEmail?28:0)+(quantity?18:0) + (extractedText&&customerName?10:0) -
+    (otherQuantity?45:0)-(buyerConflict?110:0);
+  // If no exact reference exists, buyer identity + quantity must both corroborate.
+  const enough = reference ?
+    (customerName || customerEmail || (quantity && !buyerConflict)):
+    ((customerName||customerEmail) && quantity && kind!=="OTHER");
+  return {order:o,score,evidence,conflicts,enough,reference};
+}
+
 export function deriveOperationsCandidates(messages: IntakeMessage[], orders: OperationsOrder[]): OperationsCandidate[] {
-  const unique = new Map<string, OperationsCandidate>();
-  for (const m of messages) {
-    const parts: {partId:string|null;filename:string|null}[] =
-      m.pdfs.length ? m.pdfs.map(p => ({partId:p.partId,filename:p.filename}))
-      : ((classify("", m.subject) !== "OTHER" || /\b(purchase order|order confirmation|order placed|awb|hawb|shipment|invoice|packing list)\b/i.test(m.snippet))
-        ? [{partId:null,filename:null}] : []);
-    for (const pdf of parts) {
-      const id = m.mailbox + ":" + m.messageId + ":" + (pdf.partId || "body");
-      if (unique.has(id)) continue;
-      const haystack = normalized([m.subject, m.snippet, pdf.filename || ""].join(" "));
-      const matched = orders.filter(o => {
-        const refs = [o.poNumber,o.invoiceNumber,o.buyerPoRef].map(normalized)
-          .filter(x => x.length >= 7);
-        // Reference match does not identify the actual document's consignee.
-        return refs.some(ref => haystack.includes(ref));
-      });
-      const match = matched.length===1 ? matched[0] : null;
-      const state = matched.length>1 ? "MULTIPLE_MATCHES" : match ? "POSSIBLE_ORDER_MATCH" : "NEEDS_REVIEW";
+  const unique=new Map<string,OperationsCandidate>();
+  for(const m of messages) {
+    const messageText=m.subject+" "+m.snippet;
+    const orderMail=orderSignal.test(messageText);
+    const parts:{partId:string|null;filename:string|null;text:string}[]=[
+      ...m.pdfs.map(p=>({partId:p.partId,filename:p.filename,text:(p as {text?:string}).text||""})),
+      ...((orderMail || (m.pdfs.length===0 && shippingSignal.test(messageText)))
+        ? [{partId:null,filename:null,text:""}] : []),
+    ];
+    for(const p of parts) {
+      const id=m.mailbox+":"+m.messageId+":"+(p.partId||"body");
+      if(unique.has(id))continue;
+      const kind=classifyDocument(p.filename||"",m.subject,p.text);
+      const descriptive=[m.subject,m.snippet,p.filename||""].join(" ");
+      const relevant=kind!=="OTHER" || orderMail || shippingSignal.test(messageText);
+      if(!relevant || (p.filename && irrelevantFile.test(p.filename)))continue;
+      const rankings=orders.map(o=>scoreOrder(o,m,descriptive,p.text,kind))
+        .filter(x=>x.score>0&&x.enough).sort((a,b)=>b.score-a.score);
+      const best=rankings[0];
+      const second=rankings[1];
+      // An email thread may mention multiple order numbers. Never assume its
+      // attachment belongs to the highest-scoring one without document review.
+      const refOwners=orders.filter(o=>
+        [o.poNumber,o.invoiceNumber,o.buyerPoRef].some(ref=>refMatch(ref,descriptive+" "+p.text)));
+      const mixedReferences=refOwners.length>1;
+      const tie=!!best&&!!second&&best.score-second.score<20;
+      const newOrder=orderMail && p.partId===null && !best?.reference;
+      const conflict=!!best?.conflicts.length || mixedReferences;
+      // Do not associate a new customer order with an older portal order by name alone.
+      const supportedTextMatch=!!best && best.evidence.includes("Customer name") &&
+        best.evidence.includes("Sheet quantity") && best.evidence.includes("PDF text inspected");
+      const suggested=!tie&&!conflict&&!newOrder&&best&&
+        (best.score>=85 || (supportedTextMatch && best.score>=55))?best.order:null;
+      const state=tie?"MULTIPLE_MATCHES":suggested?"POSSIBLE_ORDER_MATCH":"NEEDS_REVIEW";
+      // Candidate review is still useful even when the best match is not conclusive.
+      const reason=tie?"Two or more orders have similar evidence; manual verification required.":
+        conflict?"Conflicting document data: "+(mixedReferences?"Multiple order references; ":"")+(best?.conflicts||[]).join("; "):
+        newOrder?"Potential new customer order; create a draft only after verifying order lines.":
+        suggested?"Proposed only: "+best!.evidence.join(", ")+". Document is not shared.":
+        "Potential order/shipment document without enough independent evidence.";
       unique.set(id,{
-        id, mailbox:m.mailbox, messageId:m.messageId, partId:pdf.partId,
-        filename:pdf.filename, subject:m.subject, from:m.from,date:m.date,snippet:m.snippet,
-        kind:classify(pdf.filename || "",m.subject),state,
-        suggestedOrderId:match?.id||null,suggestedDistributorId:match?.distributorId||null,
-        suggestedDistributorName:match?.distributorName||null,
-        reason:state==="MULTIPLE_MATCHES"
-          ? "The same reference appears on several orders; manual review required."
-          : match ? "Existing PO/invoice reference found. Consignee inside PDF is not yet verified."
-          : "No unique existing portal order reference found. Review customer and order.",
+        id,mailbox:m.mailbox,messageId:m.messageId,partId:p.partId,
+        filename:p.filename,subject:m.subject,from:m.from,date:m.date,snippet:m.snippet,
+        kind,state,suggestedOrderId:suggested?.id||null,
+        suggestedDistributorId:suggested?.distributorId||(newOrder?best?.order.distributorId:null)||null,
+        suggestedDistributorName:suggested?.distributorName||null,
+        reason,confidence:Math.max(0,Math.min(100,best?.score||0)),
+        evidence:best?.evidence||[],conflicts:[...(best?.conflicts||[]),...(mixedReferences?["Multiple order references in the same email/document"]:[])],
       });
     }
   }
-  return [...unique.values()].sort((a,b)=>{
-    const da=Date.parse(a.date)||0,db=Date.parse(b.date)||0;
-    return db-da||a.id.localeCompare(b.id);
-  });
+  return [...unique.values()].sort((a,b)=>(Date.parse(b.date)||0)-(Date.parse(a.date)||0));
 }

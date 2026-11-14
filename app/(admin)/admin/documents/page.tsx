@@ -22,10 +22,16 @@ export default async function Page() {
     include: {
       distributor: true, // if relation exists
       documents: true,
+      items: {select:{qty:true,unitPrice:true}},
     },
     orderBy: { createdAt: "desc" },
     take: 800,
   });
 
-  return <AdminDocumentsClient initialOrders={orders as any} />;
+  const proposals=await prisma.operationsInboxItem.findMany({
+    where:{mailbox:"info",reviewStatus:"PENDING",suggestedOrderId:{not:null}},
+    select:{id:true,suggestedOrderId:true,kind:true,filename:true,subject:true,matchReason:true,receivedAt:true},
+    orderBy:{receivedAt:"desc"},take:700,
+  });
+  return <AdminDocumentsClient initialOrders={orders as any} internalProposals={proposals} />;
 }
