@@ -51,6 +51,9 @@ export function parseForwarderReport(sender:string,subject:string,body:string){
  const header=[subject,fresh].join("\n");
  const etd=capture(fresh,/(?:^|\n)\s*(?:OnBoard Date|On Board Date|ETD(?:\s+[A-Z ]{0,30})?|Sailed NHAVA SHEVA)\s*[:\-]?\s*\n?\s*(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/im);
  const eta=capture(fresh,/(?:^|\n)\s*ETA(?:\s+[A-Z ]{0,35})?\s*[:\-]?\s*\n?\s*(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/im);
+ const etaLocation=capture(fresh,/(?:^|\n)\s*ETA\s+([A-Z][A-Z ]{2,40})\s*\n\s*\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4}/im);
+ const etdLocation=capture(fresh,/(?:^|\n)\s*(?:ETD|Sailed)\s+([A-Z][A-Z ]{2,40})\s*\n\s*\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4}/im);
+ const finalDestination=capture(fresh,/(?:^|\n)\s*Final Destination\s*[:\-]?\s*\n\s*([A-Z][A-Z ]{2,40})/im);
  const air=capture(header,/\b(?:AWB(?: NO)?|HAWB(?: NO)?|MAWB(?: NO)?)[\s:\/#-]*([A-Z]{0,3}\d{6,14})\b/i);
  const booking=capture(subject,/\b(AE\d{5,10}|RD\d{2,8}|\d{4}\/\d{4})\b/i);
  const ref=capture(header,/\b(CST[\/_-]\d{2}[\/_-]\d{2}[\/_-]\d{1,4})\b/i);
@@ -61,6 +64,6 @@ export function parseForwarderReport(sender:string,subject:string,body:string){
   /\bhas been stuffed\b/i.test(fresh)?"STUFFED":"UPDATE_RECEIVED";
  const travel=/sea docs|sea freight|vessel|container/i.test(header)?"SEA":/hawb|mawb|air freight|airport/i.test(header)?"AIR":"";
  return {agent:"Orangestar Logistics",sourceSender:sender,booking,invoiceRef:ref,
-   etd,eta,hawb:air,trackingNumber:"",carrier:"UNKNOWN" as Carrier,
+   etd,eta,etdLocation,etaLocation,finalDestination,hawb:air,trackingNumber:"",carrier:"UNKNOWN" as Carrier,
    vessel,container,status:latestStatus,transportMode:travel,sourceSubject:subject};
 }
