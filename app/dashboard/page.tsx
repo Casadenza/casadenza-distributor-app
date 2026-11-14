@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Calculator,
   Sparkles,
+  Gift,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -329,6 +330,7 @@ export default async function SlimPremiumDashboard() {
         <SlimActionCard title="Inventory" desc="Stone Collection" href="/dashboard/products" icon={Package} />
         <SlimActionCard title="Pricing" desc="Active Schemes" href="/dashboard/price-schemes" icon={Coins} />
         <SlimActionCard title="Tracking" desc="Order History" href="/dashboard/my-orders" icon={Truck} />
+        <SlimActionCard title="Partner Rewards" desc="Non-expiring points" href="/dashboard/rewards" icon={Gift} />
         <SlimActionCard
           title="Archive"
           desc="Technical Specs"
