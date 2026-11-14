@@ -499,3 +499,15 @@ model OperationsInboxScanRun {
 
   @@index([startedAt])
 }
+
+
+// Gmail credentials are encrypted with a server-only key before storage.
+// Never expose token values through admin endpoints or distributor views.
+model GmailMailboxConnection {
+  mailbox               String   @id
+  address               String
+  encryptedRefreshToken String   @db.Text
+  connectedBy           String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
