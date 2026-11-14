@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, MailSearch, ExternalLink, Search, ShieldCheck, RefreshCw } from "lucide-react";
 
-type Mailbox = { mailbox: "info" | "neeraj"; address: string; configured: boolean };
+type Mailbox = { mailbox: "info" | "alex"; address: string; configured: boolean };
 type Pdf = { partId: string; filename: string; size: number };
-type Match = { mailbox: "info" | "neeraj"; address: string; messageId: string; subject: string; from: string; date: string; attachments: Pdf[] };
+type Match = { mailbox: "info" | "alex"; address: string; messageId: string; subject: string; from: string; date: string; attachments: Pdf[] };
 type Issue = { mailbox: string; code: string };
 type Order = { id: string; distributorId: string; distributorName: string; country: string | null; poNumber: string; invoiceNumber: string; date: string };
 
@@ -121,8 +121,9 @@ export default function ShipmentMailFinder({ orders }: { orders: Order[] }) {
           <p className="font-semibold">Connect both company mailboxes to enable search</p>
           <p>ChatGPT Gmail connections cannot be reused here. Authorize each mailbox separately using Google OAuth read-only access, then set these server-only Vercel environment variables:</p>
           <p className="my-2 break-all rounded-lg bg-white px-3 py-2 font-mono text-[11px]">
-            GMAIL_CLIENT_ID · GMAIL_CLIENT_SECRET · GMAIL_REFRESH_TOKEN_INFO · GMAIL_REFRESH_TOKEN_NEERAJ
+            GMAIL_CLIENT_ID · GMAIL_CLIENT_SECRET · GMAIL_REFRESH_TOKEN_INFO · GMAIL_REFRESH_TOKEN_ALEX
           </p>
+          <p>The first mailbox handles shipment documents; Alex can also be used to identify inbound purchase orders for manual order intake.</p>
           <p>Use the Gmail API scope <code className="break-all">https://www.googleapis.com/auth/gmail.readonly</code>. Keep all refresh tokens and secrets out of chat and GitHub.</p>
           <div className="mt-3 flex flex-wrap gap-4">
             <a className="font-semibold underline underline-offset-2" href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>
