@@ -26,7 +26,7 @@ function scheduledSlot(now: Date) {
 }
 
 /**
- * Vercel Cron: every 15 minutes (Pro/Enterprise plan).
+ * Vercel Schedules: every 15 minutes (available on Hobby as public beta).
  * Authorized production-only read of both Gmail inboxes and persistence of
  * unverified candidate metadata. Never creates orders or shares documents.
  * Requires reviewed migration + AUTO_INBOX_SCAN_ENABLED=true + CRON_SECRET.
@@ -50,6 +50,21 @@ export async function GET(request: Request) {
     return json({ok:false,error:"Scan history database not ready. Apply the approved migration first."},503);
   }
   try {
+    const [priorInfo, priorAlex] = await Promise.all([
+      prisma.operationsInboxScanRun.findFirst({
+        where:{infoStatus:"SUCCESS"},orderBy:{startedAt:"desc"},select:{startedAt:true},
+      }),
+      prisma.operationsInboxScanRun.findFirst({
+        where:{alexStatus:"SUCCESS"},orderBy:{startedAt:"desc"},select:{startedAt:true},
+      }),
+    ]);
+    const previous=[priorInfo,priorAlex];
+    const now=Date.now();
+    const backfillDays=3;
+    const overlapMs=30*60*1000;
+    const oldestAllowed=now-backfillDays*24*60*60*1000;
+    const gaps=previous.flatMap((p,i)=>p&&p.startedAt.getTime()<oldestAllowed
+      ? [mailboxes[i].mailbox+":Gap longer than three days; older messages need manual backfill."] : []);
     const [orders, scanResults] = await Promise.all([
       prisma.order.findMany({
         select:{id:true,distributorId:true,createdAt:true,notes:true,
@@ -57,7 +72,12 @@ export async function GET(request: Request) {
         orderBy:{createdAt:"desc"},take:1500,
       }),
       Promise.allSettled(
-        mailboxes.map(m=>scanRecentMailbox(m.mailbox as ShipmentMailbox,{days:3,limit:80}))
+        mailboxes.map((m,i)=>{
+          const previousAt=previous[i]?.startedAt.getTime();
+          const afterEpochSeconds=previousAt
+            ? Math.floor(Math.max(oldestAllowed,previousAt-overlapMs)/1000):undefined;
+          return scanRecentMailbox(m.mailbox as ShipmentMailbox,{days:backfillDays,limit:80,afterEpochSeconds});
+        })
       ),
     ]);
     const orderInfo:OperationsOrder[] = orders.map(o=>{
@@ -88,13 +108,13 @@ export async function GET(request: Request) {
       ? [mailboxes[i].mailbox+":"+(s.reason instanceof Error && /^GMAIL_[A-Z_]+$/.test(s.reason.message)
         ? s.reason.message:"SCAN_FAILED")] : []);
     const partialMailbox=scanResults.some(s=>s.status==="fulfilled"&&s.value.length>=80);
-    const status=issueCodes.length===2?"FAILED":(issueCodes.length>0||partialMailbox?"PARTIAL":"SUCCESS");
+    const status=issueCodes.length===2?"FAILED":(issueCodes.length>0||partialMailbox||gaps.length>0?"PARTIAL":"SUCCESS");
     await prisma.operationsInboxScanRun.update({
       where:{id:scanRun.id},
       data:{status,infoStatus:scanResults[0]?.status==="fulfilled"?"SUCCESS":"FAILED",
         alexStatus:scanResults[1]?.status==="fulfilled"?"SUCCESS":"FAILED",
         messagesScanned:allMessages.length,itemsAdded:added.count,
-        errorSummary:[...issueCodes,...(partialMailbox?["One or more inboxes hit the 80-message scan cap; increase capacity if this persists."]:[])].join("; ")||null,
+        errorSummary:[...issueCodes,...gaps,...(partialMailbox?["One or more inboxes hit the 80-message scan cap; increase capacity if this persists."]:[])].join("; ")||null,
         completedAt:new Date()},
     });
     console.info("Operations inbox scan", {slot,status,messages:allMessages.length,candidates:rows.length,added:added.count});
