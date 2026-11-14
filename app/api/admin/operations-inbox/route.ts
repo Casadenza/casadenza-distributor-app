@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   if (ref && (ref.length<3 || ref.length>90 || /[\r\n]/.test(ref))) {
     return NextResponse.json({error:"Search by a 3-90 character reference"},{status:400});
   }
-  const mailboxes=gmailMailboxStatus();
+  const mailboxes=await gmailMailboxStatus();
   // When the production cron is activated, the admin reads a persistent inbox.
   // Simply opening this page no longer triggers Gmail polling.
   const queueMode = process.env.VERCEL_ENV === "production" &&
