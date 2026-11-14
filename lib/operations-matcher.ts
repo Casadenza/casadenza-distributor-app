@@ -43,10 +43,14 @@ function classify(filename: string, subject: string) {
 export function deriveOperationsCandidates(messages: IntakeMessage[], orders: OperationsOrder[]): OperationsCandidate[] {
   const unique = new Map<string, OperationsCandidate>();
   for (const m of messages) {
-    const parts: {partId:string|null;filename:string|null}[] =
-      m.pdfs.length ? m.pdfs.map(p => ({partId:p.partId,filename:p.filename}))
-      : ((classify("", m.subject) !== "OTHER" || /\b(purchase order|order confirmation|order placed|awb|hawb|shipment|invoice|packing list)\b/i.test(m.snippet))
-        ? [{partId:null,filename:null}] : []);
+    const orderMail = /\b(new order|purchase order|order confirmation|please (?:place|process|book) (?:an? )?order|order placed)\b/i
+      .test(m.subject+" "+m.snippet);
+    const parts: {partId:string|null;filename:string|null}[] = [
+      ...m.pdfs.map(p=>({partId:p.partId,filename:p.filename})),
+      ...((orderMail || (m.pdfs.length===0 && (classify("",m.subject)!=="OTHER" ||
+        /\b(awb|hawb|shipment|invoice|packing list|shipping bill|proforma|order)\b/i.test(m.snippet))))
+        ? [{partId:null,filename:null}] : []),
+    ];
     for (const pdf of parts) {
       const id = m.mailbox + ":" + m.messageId + ":" + (pdf.partId || "body");
       if (unique.has(id)) continue;
@@ -78,7 +82,10 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
       const supported = top && (top.reference ||
         ((top.customerName||top.customerEmail) && (top.quantity||documentSignal)));
       if ((!documentSignal&&!top?.reference) || (unrelated&&!top?.reference)) continue;
-      const match = supported&&!tie ? top.order : null;
+      // An incoming purchase order may be a NEW order from a known customer.
+      // Do not silently attach it to an older order solely on customer identity.
+      const newOrderDraft = orderMail && pdf.partId===null && !top?.reference;
+      const match = supported&&!tie&&!newOrderDraft ? top.order : null;
       const state = tie ? "MULTIPLE_MATCHES" : match ? "POSSIBLE_ORDER_MATCH" : "NEEDS_REVIEW";
       const evidence = top ? [
         top.reference?"exact PO/invoice reference":null,
@@ -90,9 +97,12 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
         id, mailbox:m.mailbox, messageId:m.messageId, partId:pdf.partId,
         filename:pdf.filename, subject:m.subject, from:m.from,date:m.date,snippet:m.snippet,
         kind,state,
-        suggestedOrderId:match?.id||null,suggestedDistributorId:match?.distributorId||null,
+        suggestedOrderId:match?.id||null,suggestedDistributorId:match?.distributorId||
+          (newOrderDraft&&!tie?top?.order.distributorId:null)||null,
         suggestedDistributorName:match?.distributorName||null,
-        reason:state==="MULTIPLE_MATCHES"
+        reason:newOrderDraft && !tie && top
+          ? "Potential new customer order (including email-only order). Verify requested items and quantities; create a draft order after review."
+          : state==="MULTIPLE_MATCHES"
           ? "Multiple orders share the strongest evidence. Verify the exact consignee and invoice."
           : match ? "Possible match based on "+evidence+". PDF contents and consignee not verified; no document shared."
           : "Relevant shipping/order message but no unique customer/order evidence. Manual review required.",
