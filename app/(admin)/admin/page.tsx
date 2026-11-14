@@ -80,8 +80,8 @@ export default async function AdminDashboard() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Main Action Modules */}
+          <SlimAction title="Order & Shipment Hub" desc="Orders, Invoices, AWB & HAWB" href="/admin/operations" icon={ClipboardList} />
           <SlimAction title="Orders Hub" desc="Order Pipeline & Status" href="/admin/orders" icon={Clock} />
-          <SlimAction title="Email Order Intake" desc="Alex Mailbox PO Review" href="/admin/order-intake" icon={ClipboardList} />
           <SlimAction title="Partner Rewards" desc="Points, Activities & Redemptions" href="/admin/rewards" icon={Gift} />
           <SlimAction title="Communications Centre" desc="Distributor Messages & Replies" href="/admin/communications" icon={Mail} />
           <SlimAction title="Products" desc="Catalog Management" href="/admin/products" icon={Package} />
@@ -91,7 +91,7 @@ export default async function AdminDashboard() {
           <SlimAction title="Training" desc="Academy Hub" href="/admin/training" icon={GraduationCap} />
           <SlimAction title="Marketing" desc="Toolkit Assets" href="/admin/marketing-toolkit" icon={Palette} />
           <SlimAction title="Documents" desc="Official Resources" href="/admin/documents" icon={Files} />
-          <SlimAction title="Shipment Finder" desc="AWB, HAWB & Invoices" href="/admin/shipments" icon={Plane} />
+
           <SlimAction title="Calculator" desc="Packing Engine" href="/admin/packing-calculator" icon={Calculator} />
           <SlimAction title="Support" desc="Help Desk" href="/admin/support" icon={LifeBuoy} />
         </div>
