@@ -209,7 +209,7 @@ export default function AdminDocumentsClient({ initialOrders, internalProposals=
       <div className="sticky top-0 z-40 bg-white border-b border-[#EEEAE2] shadow-sm">
         <div className="px-4 py-3 flex flex-wrap items-end gap-4">
           <div className="flex-1 min-w-[160px]">
-            <h1 className="text-sm font-serif font-bold uppercase tracking-[0.2em]">Admin Documents</h1>
+            <h1 className="text-sm font-serif font-bold uppercase tracking-[0.2em]">Order Documents</h1>
             <p className="text-[9px] text-[#A39E93] font-bold uppercase">{filtered.length} Orders</p>
           </div>
 
