@@ -23,7 +23,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
   }catch(e){setMessage(e instanceof Error?e.message:"Unable to search");}
   finally{setScanning(false);}
  }
- function useReport(report:{agent:string;etd:string;eta:string;vessel:string;container:string;status:string}){
+ function applyReport(report:{agent:string;etd:string;eta:string;vessel:string;container:string;status:string}){
   // Report dates may be formatted as DD-MON-YY; convert strictly before
   // presenting them as editable YYYY-MM-DD form dates.
   function iso(v:string){
@@ -93,7 +93,7 @@ export default function OrderShipmentPanel({orderId,notes,admin=false}:{orderId:
        <p className="font-semibold">{r.subject}</p>
        <p className="text-stone-500">{r.date} · Booking {r.proposed.booking||"Not extracted"} · Invoice {r.proposed.invoiceRef||"Not extracted"}</p>
        <p>ETD {r.proposed.etd||"Not stated"} · ETA {r.proposed.eta||"Not stated"} · {r.proposed.status}</p>
-       <button className="rounded border px-2 py-1" onClick={()=>useReport(r.proposed)}>Copy proposed details for verification</button>
+       <button className="rounded border px-2 py-1" onClick={()=>applyReport(r.proposed)}>Copy proposed details for verification</button>
      </div>)}
   </div>}
   {link&&<div className="flex flex-wrap items-center gap-3">
