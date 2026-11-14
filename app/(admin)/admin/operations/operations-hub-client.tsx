@@ -7,7 +7,7 @@ type Order = {
   country: string | null; poNumber: string; invoiceNumber: string; date: string;
 };
 type Candidate = {
-  id: string; mailbox: "info" | "alex"; messageId: string; partId: string | null;
+  id: string; queueItemId?: string; mailbox: "info" | "alex"; messageId: string; partId: string | null;
   filename: string | null; subject: string; from: string; date: string; snippet: string;
   kind: "PURCHASE_ORDER" | "INVOICE" | "AWB_HAWB" | "PACKING_LIST" | "OTHER";
   state: "POSSIBLE_ORDER_MATCH" | "NEEDS_REVIEW" | "MULTIPLE_MATCHES";
@@ -16,7 +16,8 @@ type Candidate = {
 };
 type Mailbox = { mailbox: string; address: string; configured: boolean };
 type Feed = { ok:boolean; mailboxes:Mailbox[]; items:Candidate[]; issues:{mailbox:string;code:string}[];
-  sharingEnabled:boolean; note:string; scanMode:string; scannedMessages:number };
+  sharingEnabled:boolean; note:string; scanMode:string; scannedMessages:number;
+  queueMode?:boolean;lastScanAt?:string|null;lastScanStatus?:string;lastScanIssues?:string|null };
 const input = "min-h-[44px] w-full rounded-xl border border-[#E1D9CB] bg-white px-3 text-[13px] outline-none focus:border-[#B49762]";
 const button = "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#26221D] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45";
 const kindName:Record<string,string> = {
@@ -53,7 +54,11 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
     } catch(e:any) {setError(e?.message || "Unable to load inbox");}
     finally {setLoading(false);}
   }
-  useEffect(()=>{void refresh();},[]);
+  useEffect(()=>{
+    void refresh();
+    const timer=setInterval(()=>{void refresh();},60000);
+    return ()=>clearInterval(timer);
+  },[]);
   const selected=(feed?.items||[]).find(i=>i.id===selectedId)||null;
   const distributors=useMemo(()=>{
     const map=new Map<string,{id:string;name:string;country:string|null}>();
@@ -110,7 +115,25 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
       if(!response.ok)throw Error(data.error||"Unable to share this PDF");
       setNotice("File attached to "+chosenOrder.distributorName+"'s order; no email was forwarded.");
       setSelectedId(null);setVerified(false);
+      if(feed?.queueMode) await refresh();
     }catch(e:any){setError(e?.message||"Unable to attach PDF");}
+    finally{setPublishing(false);}
+  }
+
+  async function dismissCandidate(item:Candidate) {
+    if(!item.queueItemId||!feed?.queueMode||publishing)return;
+    if(!window.confirm("Dismiss this unrelated email or attachment? It will leave Needs Review but the original Gmail message remains unchanged."))return;
+    setPublishing(true);setError("");setNotice("");
+    try{
+      const response=await fetch("/api/admin/operations-inbox/review",{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({action:"DISMISS",itemId:item.queueItemId}),
+      });
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error||"Unable to dismiss");
+      setFeed(prev=>prev?{...prev,items:prev.items.filter(i=>i.id!==item.id)}:prev);
+      setSelectedId(null);setNotice("Unrelated item dismissed. No customer document was published.");
+    }catch(e:any){setError(e?.message||"Unable to dismiss item");}
     finally{setPublishing(false);}
   }
 
@@ -126,7 +149,7 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {[
         {name:"Mailboxes configured",count:connected+" / 2",note:"Info + Alex"},
-        {name:"Incoming items",count:String(feed?.items?.length||0),note:"Recent Gmail scan"},
+        {name:"Incoming items",count:String(feed?.items?.length||0),note:feed?.queueMode?"Stored pending queue":"Recent Gmail scan"},
         {name:"Possible order matches",count:String((feed?.items||[]).filter(i=>i.state==="POSSIBLE_ORDER_MATCH").length),note:"Verify consignee first"},
         {name:"Needs review",count:String(reviewCount),note:"Choose distributor + order"},
       ].map(m=><div className="rounded-2xl border border-[#E9E0D4] bg-white p-4" key={m.name}>
@@ -139,7 +162,7 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-[15px] font-semibold"><MailSearch size={18} className="text-[#B39158]"/>Connected inboxes</h2>
         <button className={button} disabled={loading} onClick={()=>void refresh()}>
-          <RefreshCw size={14} className={loading?"animate-spin":""}/>{loading?"Scanning…":"Scan both inboxes"}
+          <RefreshCw size={14} className={loading?"animate-spin":""}/>{loading?"Loading…":feed?.queueMode?"Refresh automatic queue":"Scan both inboxes"}
         </button>
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -153,6 +176,10 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
         Both accounts need their own read-only Gmail OAuth refresh tokens in Vercel:
         <code className="mx-1">GMAIL_REFRESH_TOKEN_INFO</code> and <code>GMAIL_REFRESH_TOKEN_ALEX</code>.
         <a className="ml-2 underline" href="https://vercel.com/casadenzas-projects/casadenza-distributor-app/settings/environment-variables" target="_blank" rel="noopener noreferrer">Configure</a>
+      </p>}
+      {feed?.queueMode&&<p className="mt-3 text-[12px] text-[#625849]">
+        <strong>Automatic scan:</strong> Every 15 minutes · Last run: {feed.lastScanAt?new Date(feed.lastScanAt).toLocaleString():"Not yet run"} · Status: {feed.lastScanStatus||"UNKNOWN"}
+        {feed.lastScanIssues&&<span className="block text-amber-800">Issue: {feed.lastScanIssues}</span>}
       </p>}
       <p className="mt-3 text-[11px] text-[#897E6B]"><ShieldCheck size={14} className="mr-1 inline"/>
         Scanning is read-only. Automatic customer-visible sharing is disabled pending private file storage and document-level identity verification.</p>
@@ -178,13 +205,13 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
           <Search size={15}/>Search both
         </button>
       </div>
-      <p className="mt-3 text-[11px] text-[#897D6D]">{candidates.length} items · {feed?.scanMode==="reference"?"Reference search":"Recent 21-day inbox scan"}</p>
+      <p className="mt-3 text-[11px] text-[#897D6D]">{candidates.length} items · {feed?.scanMode==="reference"?"Reference search":feed?.queueMode?"Automatically maintained inbox":"Recent 21-day inbox scan"}</p>
     </section>
     {error&&<p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-900">{error}</p>}
     {notice&&<p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] text-amber-900">{notice}</p>}
     <section className="space-y-3">
       {!candidates.length&&<div className="rounded-xl border border-[#E9E1D5] bg-white p-5 text-[13px] text-[#8B7F72]">
-        No matching intake items yet. Configure the mailboxes, then use Scan both inboxes.
+        No matching intake items yet. Confirm both Gmail mailboxes are connected. Automatic scans will add relevant items when the production schedule is activated.
       </div>}
       {candidates.map(item=><article className="rounded-2xl border border-[#E9E0D4] bg-white p-4 sm:p-5" key={item.id}>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -248,8 +275,10 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
           <div className="flex flex-wrap items-center gap-3">
             <button className={button} disabled={!feed?.sharingEnabled||!chosenOrder||!verified||!item.partId||publishing}
               onClick={()=>void publish()}><ShieldCheck size={15}/>{publishing?"Attaching…":"Approve & attach to distributor"}</button>
+            {feed?.queueMode&&item.queueItemId&&<button type="button" className="min-h-[44px] rounded-xl border border-[#D7CABA] px-4 text-[12px] font-semibold text-[#81634E] disabled:opacity-50"
+              disabled={publishing} onClick={()=>void dismissCandidate(item)}>Dismiss unrelated item</button>}
             {!feed?.sharingEnabled&&<p className="text-[11px] text-amber-800">
-              Preview-only: attachment sharing is disabled until secure production release.
+              Attachment sharing is disabled until a reviewed production release and an approved document.
             </p>}
           </div>
         </div>}
