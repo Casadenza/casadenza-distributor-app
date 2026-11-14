@@ -331,7 +331,8 @@ export async function searchOrangestarReports(mailbox:ShipmentMailbox,references
    const header=(name:string)=>h.find(x=>x.name.toLowerCase()===name)?.value||"";
    const from=header("from").slice(0,240);
    // Verify the actual From domain before treating as an Orangestar candidate.
-   if(!/@orangestar\.co\.in\b/i.test(from))return null;
+   const senderDomain=from.match(/[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z]{2,})/i)?.[1]?.toLowerCase();
+   if(senderDomain!=="orangestar.co.in")return null;
    const bodyPart=(part:MailPart|undefined,depth=0):string=>{
     if(!part||depth>5)return "";
     if(part.mimeType==="text/plain"&&part.body?.data)try{
