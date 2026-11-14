@@ -12,7 +12,8 @@
     "prisma:migrate:dev": "npx prisma migrate dev",
     "prisma:migrate:deploy": "npx prisma migrate deploy",
     "prisma:studio": "npx prisma studio",
-    "seed": "npx ts-node prisma/seed.ts"
+    "seed": "npx ts-node prisma/seed.ts",
+    "test:order-matcher": "node --experimental-strip-types --test tests/operations-matcher.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.19.0",
