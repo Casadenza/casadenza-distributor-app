@@ -39,7 +39,7 @@ function quantities(s: string): number[] {
 export function classifyDocument(filename: string, subject: string, extractedText = ""): DocumentKind {
   const file=canonicalText(filename), subj=canonicalText(subject), body=canonicalText(extractedText);
   const all=file+" "+subj;
-  if(/\b(shipping[\s_-]?bill|ship[\s_-]?bill|shippingbill|sb\s*(?:no|number)|let export order)\b/.test(all)) return "SHIPPING_BILL";
+  if(/\b(shipping[\s_-]?bill|ship[\s_-]?bill|shippingbill|sb\s*(?:no|number|\d{2,})|let export order)\b/.test(all)) return "SHIPPING_BILL";
   if(/\b(pro[\s-]?forma|pi[\s_-]?(?:no|number|\d{2,}))\b/.test(all) || /(?:^|[\s_.-])pi(?:[\s_.-]|$)/.test(file)) return "PROFORMA_INVOICE";
   if(/\b(hawb|mawb|awb|air[\s_-]?waybill|waybill|bill of lading|tracking|bol)\b/.test(all)) return "AWB_HAWB";
   if(/\b(packing[\s_-]?list|packinglist|packlist|pklist|p[\s_-]?list)\b/.test(all)) return "PACKING_LIST";
@@ -130,7 +130,10 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
       const newOrder=orderMail && p.partId===null && !best?.reference;
       const conflict=!!best?.conflicts.length;
       // Do not associate a new customer order with an older portal order by name alone.
-      const suggested=!tie&&!conflict&&!newOrder&&best&&best.score>=85?best.order:null;
+      const supportedTextMatch=!!best && best.evidence.includes("Customer name") &&
+        best.evidence.includes("Sheet quantity") && best.evidence.includes("PDF text inspected");
+      const suggested=!tie&&!conflict&&!newOrder&&best&&
+        (best.score>=85 || (supportedTextMatch && best.score>=55))?best.order:null;
       const state=tie?"MULTIPLE_MATCHES":suggested?"POSSIBLE_ORDER_MATCH":"NEEDS_REVIEW";
       // Candidate review is still useful even when the best match is not conclusive.
       const reason=tie?"Two or more orders have similar evidence; manual verification required.":
