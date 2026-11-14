@@ -27,7 +27,7 @@ function classify(filename: string, subject: string) {
   if (/\b(hawb|mawb|awb|waybill|bill of lading|shipping|shipment)\b/i.test(subj)) return "AWB_HAWB" as const;
   if (/\b(packing list|packing)\b/i.test(subj)) return "PACKING_LIST" as const;
   if (/\b(invoice|proforma)\b/i.test(subj)) return "INVOICE" as const;
-  if (/\b(purchase order|\bpo\b|new order)\b/i.test(subj)) return "PURCHASE_ORDER" as const;
+  if (/\b(purchase order|\bpo\b|new order|order confirmation|order placed|customer order)\b/i.test(subj)) return "PURCHASE_ORDER" as const;
   return "OTHER" as const;
 }
 /**
@@ -40,7 +40,7 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
   for (const m of messages) {
     const parts: {partId:string|null;filename:string|null}[] =
       m.pdfs.length ? m.pdfs.map(p => ({partId:p.partId,filename:p.filename}))
-      : (m.mailbox==="alex" && /\b(po|purchase order|order)\b/i.test(m.subject)
+      : ((classify("", m.subject) !== "OTHER" || /\b(purchase order|order confirmation|order placed|awb|hawb|shipment|invoice|packing list)\b/i.test(m.snippet))
         ? [{partId:null,filename:null}] : []);
     for (const pdf of parts) {
       const id = m.mailbox + ":" + m.messageId + ":" + (pdf.partId || "body");
