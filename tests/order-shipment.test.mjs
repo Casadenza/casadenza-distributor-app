@@ -23,7 +23,7 @@ test("identifies Orangestar booking reference",()=>{
 test("extracts sailed milestone and Singapore ETA without claiming Melbourne delivered",()=>{
  const body="Dear Sir,\nShipment has been Sailed.\nOnBoard Date\n08-NOV-26\nMother Vessel\nKOTA PRIMROSE - 19E\nEta SINGAPORE\n22-NOV-26\n\nFrom: prior message\nETD NHAVA SHEVA\n09-NOV-26";
  const x=parseForwarderReport("seafreight1@orangestar.co.in","RE: Sea DOCS Export Australia 1 pallet // RD02",body);
- assert.equal(x.status,"SAILED");assert.equal(x.etd,"08-NOV-26");assert.equal(x.eta,"22-NOV-26");
+ assert.equal(x.status,"SAILED");assert.equal(x.etd,"08-NOV-26");assert.equal(x.eta,"22-NOV-26");assert.equal(x.etaLocation,"SINGAPORE");
 });
 test("quoted history cannot override latest milestone",()=>{
  const x=parseForwarderReport("seafreight1@orangestar.co.in","Export Australia // RD02","ETA SINGAPORE\n22-NOV-26\nFrom: old\nETA SINGAPORE\n21-NOV-26");
