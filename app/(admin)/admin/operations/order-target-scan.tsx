@@ -25,7 +25,7 @@ export default function OrderTargetScan({orders}:{orders:OrderChoice[]}) {
   }
   return <section className="rounded-xl border bg-white p-4 space-y-3">
     <h2 className="font-semibold">Find shipment documents for an existing order</h2>
-    <p className="text-sm text-stone-600">Searches historical Gmail by the selected customer's identity, PO, and invoice; results remain proposed matches.</p>
+    <p className="text-sm text-stone-600">Searches historical Gmail by the selected customer&apos;s identity, PO, and invoice; results remain proposed matches.</p>
     <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Find customer, invoice or 175 sheets" className="w-full rounded border p-2 text-sm" aria-label="Filter orders"/>
     <select value={orderId} onChange={e=>setOrderId(e.target.value)} className="w-full rounded border p-2 text-sm" aria-label="Select order">
       <option value="">Choose an order</option>
