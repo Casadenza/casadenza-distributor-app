@@ -17,8 +17,12 @@ const out = (data: object, status = 200) =>
 export async function GET() {
   const session = await getServerSession();
   if (!session || session.role !== "ADMIN") return out({ error: "Forbidden" }, 403);
+  const distributors = await prisma.distributor.findMany({
+    select: { id: true, name: true, country: true, zohoAccountId: true },
+    orderBy: { name: "asc" }, take: 2000,
+  });
   if (!rewardFeatureEnabled()) return out({
-    ok: true, enabled: false, policy: rewardPolicyPublic(),
+    ok: true, enabled: false, policy: rewardPolicyPublic(), distributors,
     pendingSubmissions: [], pendingRedemptions: [], recentSales: [],
   });
   try {
@@ -37,7 +41,7 @@ export async function GET() {
       }),
     ]);
     return out({ ok: true, enabled: true, policy: rewardPolicyPublic(),
-      pendingSubmissions, pendingRedemptions, recentSales });
+      pendingSubmissions, pendingRedemptions, recentSales, distributors });
   } catch {
     return out({ error: "Rewards tables are not available; do not enable before reviewed migration." }, 503);
   }
