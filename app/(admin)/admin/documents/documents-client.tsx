@@ -84,7 +84,8 @@ function typePill(type: string) {
   return "bg-zinc-50 text-zinc-600 border-zinc-200";
 }
 
-export default function AdminDocumentsClient({ initialOrders }: { initialOrders: any[] }) {
+type PendingProposal={id:string;suggestedOrderId:string|null;kind:string;filename:string|null;subject:string;matchReason:string;receivedAt:Date|string|null};
+export default function AdminDocumentsClient({ initialOrders, internalProposals=[] }: { initialOrders: any[];internalProposals?:PendingProposal[] }) {
   const [orders, setOrders] = useState<any[]>(initialOrders || []);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -272,6 +273,7 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
           const poDate = meta?.poDate || new Date(o.createdAt).toLocaleDateString();
           const docs = (o?.documents || []) as any[];
           const visibleDocs=docs.filter(d=>!folderByOrder[o.id]||folderByOrder[o.id]==="ALL"||documentFolder(d)===folderByOrder[o.id]);
+          const proposed=internalProposals.filter(p=>p.suggestedOrderId===o.id);
 
           const distributorLabel =
             o?.distributor?.name ||
@@ -392,6 +394,20 @@ export default function AdminDocumentsClient({ initialOrders }: { initialOrders:
                     </div>
                   </div>
 
+                  {/* Internal-only Gmail matches. Never included in the distributor documents relation. */}
+                  <section className="mb-4 overflow-hidden rounded-lg border border-amber-200 bg-amber-50/50">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 px-4 py-3">
+                      <div><strong className="text-xs text-amber-950">Gmail document proposals — admin only</strong>
+                        <p className="text-[10px] text-amber-800">Not verified or published. Match invoice and consignee before release.</p></div>
+                      <span className="text-xs font-semibold text-amber-900">{proposed.length} candidates</span>
+                    </div>
+                    {proposed.length>0 ? proposed.map(p=><div key={p.id} className="border-b border-amber-100 px-4 py-2 text-xs">
+                      <div className="font-semibold">{p.kind.replaceAll("_"," ")} · {p.filename||"Email body"}</div>
+                      <div className="text-stone-600">{p.subject}</div>
+                      <div className="text-amber-900">{p.matchReason}</div>
+                    </div>) : <p className="px-4 py-3 text-xs text-stone-600">No proposed Gmail documents for this order in the existing scan queue.</p>}
+                    <a href="/admin/operations/preview" className="block px-4 py-3 text-xs font-semibold underline">Open matching evidence preview</a>
+                  </section>
                   {/* Documents list */}
                   <div className="bg-white border border-[#EEEAE2] rounded-sm overflow-hidden">
                     <div className="px-4 py-2 border-b border-[#F2EFE9] flex items-center justify-between">
