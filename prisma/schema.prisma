@@ -442,7 +442,8 @@ model PartnerRewardSale {
   wallet          PartnerRewardsWallet @relation(fields: [distributorId], references: [distributorId], onDelete: Cascade)
   invoiceId       String
   invoiceDate     DateTime
-  netUsdCents     Int
+  currency        String
+  netAmountCents  Int
   pointsAwarded   Int
   verifiedBy      String
   createdAt       DateTime @default(now())
