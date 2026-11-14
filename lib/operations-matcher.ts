@@ -21,14 +21,14 @@ function normalized(value: string) {
 function classify(filename: string, subject: string) {
   const file = (filename || "").toLowerCase();
   const subj = (subject || "").toLowerCase();
-  if (/shipping[ -]?bill|ship[ -]?bill|\\bsb\\b|let export/i.test(file)) return "SHIPPING_BILL" as const;
+  if (/shipping[ -]?bill|ship[ -]?bill|\bsb\b|let export/i.test(file)) return "SHIPPING_BILL" as const;
   if (/proforma|pro-forma|(?:^|[\\s_.-])pi(?:[\\s_.-]|$)/i.test(file)) return "PROFORMA_INVOICE" as const;
   if (/\b(hawb|mawb|awb|waybill|airwaybill|air waybill|bill of lading|bol|tracking)\b/i.test(file)) return "AWB_HAWB" as const;
   if (/\b(packing|packlist|packinglist|pklist|p-list)\b/i.test(file)) return "PACKING_LIST" as const;
   if (/\b(invoice|inv|commercial invoice|proforma|pi)\b/i.test(file)) return "INVOICE" as const;
   if (/\b(purchase order|po|order form)\b/i.test(file)) return "PURCHASE_ORDER" as const;
-  if (/shipping[ -]?bill|ship[ -]?bill|\\bsb\\b/i.test(subj)) return "SHIPPING_BILL" as const;
-  if (/proforma|pro-forma|\\bpi\\b/i.test(subj)) return "PROFORMA_INVOICE" as const;
+  if (/shipping[ -]?bill|ship[ -]?bill|\bsb\b/i.test(subj)) return "SHIPPING_BILL" as const;
+  if (/proforma|pro-forma|\bpi\b/i.test(subj)) return "PROFORMA_INVOICE" as const;
   if (/\b(hawb|mawb|awb|waybill|bill of lading|shipping|shipment)\b/i.test(subj)) return "AWB_HAWB" as const;
   if (/\b(packing list|packing)\b/i.test(subj)) return "PACKING_LIST" as const;
   if (/\b(invoice|proforma)\b/i.test(subj)) return "INVOICE" as const;
@@ -85,6 +85,7 @@ export function deriveOperationsCandidates(messages: IntakeMessage[], orders: Op
       // An incoming purchase order may be a NEW order from a known customer.
       // Do not silently attach it to an older order solely on customer identity.
       const newOrderDraft = orderMail && pdf.partId===null && !top?.reference;
+      if(newOrderDraft && !top) continue;
       const match = supported&&!tie&&!newOrderDraft ? top.order : null;
       const state = tie ? "MULTIPLE_MATCHES" : match ? "POSSIBLE_ORDER_MATCH" : "NEEDS_REVIEW";
       const evidence = top ? [
