@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "@/lib/serverSession";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { searchOperationsMailbox } from "@/lib/shipment-mail";
+import { searchOperationsMailbox, readShipmentPdf } from "@/lib/shipment-mail";
+import { extractShipmentPdfText } from "@/lib/shipment-pdf-text";
 import { deriveOperationsCandidates, type OperationsOrder } from "@/lib/operations-matcher";
 
 export const runtime = "nodejs";
@@ -50,6 +51,23 @@ export async function POST(request: Request) {
   const results=await Promise.allSettled(distinct.map(term=>searchOperationsMailbox("info",term)));
   const messages=[...new Map(results.flatMap(r=>r.status==="fulfilled"?r.value:[])
     .map(m=>[m.messageId,m])).values()];
+  // Read a bounded number of real PDFs for accurate consignee/invoice checks.
+  // Content stays in process memory; the review DB receives metadata only.
+  const attachments=messages.flatMap(m=>m.pdfs.map(p=>({m,p})))
+    .filter(x=>x.p.partId&&(!x.p.size||x.p.size<=2*1024*1024))
+    .slice(0,12);
+  let pdfsParsed=0,pdfsEmpty=0;
+  for(let start=0;start<attachments.length;start+=3) {
+    const batch=attachments.slice(start,start+3);
+    await Promise.all(batch.map(async ({m,p})=>{
+      try {
+        const doc=await readShipmentPdf({mailbox:"info",messageId:m.messageId,partId:p.partId});
+        const extracted=await extractShipmentPdfText(doc.buffer);
+        if(extracted.status==="EXTRACTED") {p.text=extracted.text;pdfsParsed++;}
+        else pdfsEmpty++;
+      } catch {pdfsEmpty++;}
+    }));
+  }
   const candidates=deriveOperationsCandidates(messages,[details])
     .filter(c=>c.suggestedOrderId===details.id);
   const rows=candidates.map(c=>({
@@ -62,7 +80,8 @@ export async function POST(request: Request) {
   const added=rows.length?await prisma.operationsInboxItem.createMany({data:rows,skipDuplicates:true}):{count:0};
   const issues=results.filter(r=>r.status==="rejected").length;
   return NextResponse.json({ok:issues===0,orderId:details.id,searchTerms:distinct.length,
-    messagesInspected:messages.length,matchedCandidates:candidates.length,added:added.count,
+    messagesInspected:messages.length,pdfsParsed,pdfsEmpty,
+    matchedCandidates:candidates.length,added:added.count,
     failures:issues,reviewRequired:true,sharingEnabled:false}, {status:issues===results.length?503:200,
       headers:{"Cache-Control":"private, no-store"}});
 }
