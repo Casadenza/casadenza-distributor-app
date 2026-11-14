@@ -219,7 +219,7 @@ export default function OperationsHubClient({orders}:{orders:Order[]}) {
               <p className="text-[11px] text-[#8A7A64]">Only distributors with an existing portal order are listed.</p>
             </div>
             <div className="space-y-2">
-              <label className="block text-[12px] font-semibold">2. Choose that distributor's exact order</label>
+              <label className="block text-[12px] font-semibold">2. Choose the exact order belonging to that distributor</label>
               <input className={input} placeholder="Filter PO / invoice / order ID…" value={orderFilter}
                 onChange={e=>setOrderFilter(e.target.value)} disabled={!distributorId}/>
               <select className={input} value={orderId} disabled={!distributorId}
