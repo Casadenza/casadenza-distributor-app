@@ -3,7 +3,7 @@
  * The ChatGPT Gmail connections cannot be reused by the deployed portal.
  * Set the two mailbox refresh tokens in server-only Vercel environment variables.
  */
-export type ShipmentMailbox = "info" | "neeraj";
+export type ShipmentMailbox = "info" | "alex";
 type MailPart = {
   partId?: string;
   filename?: string;
@@ -22,9 +22,9 @@ type AttachmentResponse = { data?: string; size?: number };
 type ProfileResponse = { emailAddress?: string };
 
 export const MAX_SHIPMENT_PDF_BYTES = 10 * 1024 * 1024;
-const mailboxes: Record<ShipmentMailbox, { address: string; env: "GMAIL_REFRESH_TOKEN_INFO" | "GMAIL_REFRESH_TOKEN_NEERAJ" }> = {
+const mailboxes: Record<ShipmentMailbox, { address: string; env: "GMAIL_REFRESH_TOKEN_INFO" | "GMAIL_REFRESH_TOKEN_ALEX" }> = {
   info: { address: "info@casadenza.com", env: "GMAIL_REFRESH_TOKEN_INFO" },
-  neeraj: { address: "neeraj@casadenza.com", env: "GMAIL_REFRESH_TOKEN_NEERAJ" },
+  alex: { address: "alex@casadenza.in", env: "GMAIL_REFRESH_TOKEN_ALEX" },
 };
 const cache = new Map<ShipmentMailbox, { token: string; expires: number }>();
 
@@ -38,7 +38,7 @@ export function gmailMailboxStatus() {
 }
 
 function isMailbox(value: string): value is ShipmentMailbox {
-  return value === "info" || value === "neeraj";
+  return value === "info" || value === "alex";
 }
 export function validMailbox(raw: unknown): ShipmentMailbox | null {
   return typeof raw === "string" && isMailbox(raw) ? raw : null;
